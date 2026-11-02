@@ -1,12 +1,3 @@
 .settings/
 .vscode/
 build/
-cmake/
-Drivers/
-.clangd
-.mxproject
-CMakeLists.txt
-CMakePresets.json
-startup_stm32h533xx.s
-STM32H533xx_FLASH.ld
-STM32H533xx_RAM.ld
