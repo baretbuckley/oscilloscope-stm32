@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "shell.h"
 
 /* USER CODE END Includes */
 
@@ -59,6 +60,21 @@ static void MX_ICACHE_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static int32_t adc_read_mv(void)
+{
+  if (HAL_ADC_PollForConversion(&hadc1, 10) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* Read the converted value */
+  uhADCxConvertedData = HAL_ADC_GetValue(&hadc1);
+
+  /* Computation of ADC conversions raw data to physical values             */
+  /* using helper macro.                                                    */
+  uhADCxConvertedData_Voltage_mVolt = __HAL_ADC_CALC_DIFF_DATA_TO_VOLTAGE(VDDA_APPLI, uhADCxConvertedData, ADC_RESOLUTION_12B);
+  return uhADCxConvertedData_Voltage_mVolt;
+}
 
 /* USER CODE END 0 */
 
@@ -102,23 +118,15 @@ int main(void)
   MX_ADC1_Init();
   MX_ICACHE_Init();
   /* USER CODE BEGIN 2 */
+  shell_init(adc_read_mv);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    if (HAL_ADC_PollForConversion(&hadc1, 10) != HAL_OK)
-    {
-      Error_Handler();
-    }
-
-    /* Read the converted value */
-    uhADCxConvertedData = HAL_ADC_GetValue(&hadc1);
-
-    /* Computation of ADC conversions raw data to physical values             */
-    /* using helper macro.                                                    */
-    uhADCxConvertedData_Voltage_mVolt = __HAL_ADC_CALC_DIFF_DATA_TO_VOLTAGE(VDDA_APPLI, uhADCxConvertedData, ADC_RESOLUTION_12B);
+    adc_read_mv();
+    shell_poll();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
