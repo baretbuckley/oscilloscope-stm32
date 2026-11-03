@@ -65,9 +65,9 @@ static int getc_nb(void)
 static void cmd_help(void)
 {
   printf("help        this\n"
-         "adc         read A1 - A0 in mV\n"
+         "adc         read A1 in mV\n"
          "dac <mV>    set D13 to 0..%u mV\n"
-         "sweep       step D13 and read it back, jumper D13 to A1, A0 to GND\n",
+         "sweep       step D13 and read it back, jumper D13 to A1\n",
          VDDA_APPLI);
 }
 
