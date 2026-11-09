@@ -47,6 +47,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Src/capture.c
     Src/shell.c
+    Src/trigger.c
 )
 
 # Add include paths

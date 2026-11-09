@@ -1,5 +1,6 @@
 #include "shell.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,18 +42,86 @@ static int getc_nb(void)
 
 static void cmd_help(void)
 {
-  printf("help        this\n"
-         "adc         read A1 in mV\n"
-         "grab [n]    take n samples of A1 at full speed, %u at most\n"
-         "dump        the last grab in mV, one per line\n",
+  printf("help                 this\n"
+         "adc                  read A1 in mV\n"
+         "rate [hz]            show or set the sample rate\n"
+         "trig [off|mV [rise|fall]]\n"
+         "                     show or set the trigger level and edge\n"
+         "pre [percent]        how much of a grab comes before the trigger\n"
+         "grab [n]             take n samples of A1, %u at most\n"
+         "dump                 the last grab in mV, one per line\n",
          CAPTURE_LEN);
 }
 
+/* hysteresis either side of the trigger level */
+#define HYST_MV 50U
+
 static size_t grabbed;
+static bool trig_on;
+static uint32_t trig_mv = VDDA_APPLI / 2U;
+static bool trig_rise = true;
+static uint32_t pre_pct = 50;
 
 static uint32_t to_mv(uint32_t raw)
 {
   return raw * VDDA_APPLI / 4095U;
+}
+
+static uint16_t to_raw(uint32_t mv)
+{
+  if (mv > VDDA_APPLI)
+    mv = VDDA_APPLI;
+  return (uint16_t)(mv * 4095U / VDDA_APPLI);
+}
+
+static void cmd_rate(const char *arg)
+{
+  uint32_t hz = (uint32_t)strtoul(arg, NULL, 10);
+
+  if (hz > 0)
+    capture_set_rate(hz);
+  uint32_t rate = capture_rate_hz();
+  printf("%lu Hz, %lu us for %u samples\n", (unsigned long)rate,
+         (unsigned long)((uint64_t)CAPTURE_LEN * 1000000U / rate),
+         CAPTURE_LEN);
+}
+
+static void cmd_trig(const char *arg)
+{
+  while (*arg == ' ')
+    arg++;
+  if (strcmp(arg, "off") == 0) {
+    trig_on = false;
+  } else if (*arg != '\0') {
+    char *rest;
+    trig_mv = (uint32_t)strtoul(arg, &rest, 10);
+    if (trig_mv > VDDA_APPLI)
+      trig_mv = VDDA_APPLI;
+    while (*rest == ' ')
+      rest++;
+    if (strcmp(rest, "rise") == 0)
+      trig_rise = true;
+    else if (strcmp(rest, "fall") == 0)
+      trig_rise = false;
+    trig_on = true;
+  }
+  if (trig_on)
+    printf("trigger %lu mV %s, %u mV hysteresis\n", (unsigned long)trig_mv,
+           trig_rise ? "rise" : "fall", HYST_MV);
+  else
+    printf("trigger off, grabs run free\n");
+}
+
+static void cmd_pre(const char *arg)
+{
+  while (*arg == ' ')
+    arg++;
+  if (*arg != '\0') {
+    pre_pct = (uint32_t)strtoul(arg, NULL, 10);
+    if (pre_pct > 100)
+      pre_pct = 100;
+  }
+  printf("%lu%% before the trigger\n", (unsigned long)pre_pct);
 }
 
 /* min, max, mean, and the frequency from rising crossings of the middle.
@@ -64,7 +133,16 @@ static void cmd_grab(const char *arg)
 
   if (n == 0 || n > CAPTURE_LEN)
     n = CAPTURE_LEN;
-  if (capture_grab(n) != 0) {
+
+  struct capture_trig t = {
+    .level = to_raw(trig_mv),
+    .hyst = to_raw(HYST_MV),
+    .rise = trig_rise,
+    .pre = (uint32_t)(n * pre_pct / 100U),
+  };
+  size_t at;
+  int got = capture_run(trig_on ? &t : NULL, n, &at);
+  if (got < 0) {
     printf("grab failed\n");
     return;
   }
@@ -94,6 +172,10 @@ static void cmd_grab(const char *arg)
 
   printf("%u samples at %lu Hz, %lu us\n", (unsigned)n, (unsigned long)rate,
          (unsigned long)((uint64_t)n * 1000000U / rate));
+  if (got > 0)
+    printf("triggered at sample %u\n", (unsigned)at);
+  else if (trig_on)
+    printf("no trigger in %u ms, took it anyway\n", CAPTURE_AUTO_MS);
   printf("min %lu  max %lu  mean %lu mV\n", (unsigned long)to_mv(lo),
          (unsigned long)to_mv(hi), (unsigned long)to_mv(sum / n));
   if (rises > 1 && band > 0)
@@ -119,6 +201,12 @@ static void run(char *cmd)
     cmd_help();
   else if (strcmp(cmd, "adc") == 0)
     printf("adc %ld mV\n", (long)read_mv());
+  else if (strcmp(cmd, "rate") == 0 || strncmp(cmd, "rate ", 5) == 0)
+    cmd_rate(cmd + 4);
+  else if (strcmp(cmd, "trig") == 0 || strncmp(cmd, "trig ", 5) == 0)
+    cmd_trig(cmd + 4);
+  else if (strcmp(cmd, "pre") == 0 || strncmp(cmd, "pre ", 4) == 0)
+    cmd_pre(cmd + 3);
   else if (strcmp(cmd, "grab") == 0 || strncmp(cmd, "grab ", 5) == 0)
     cmd_grab(cmd + 4);
   else if (strcmp(cmd, "dump") == 0)
