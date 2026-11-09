@@ -17,6 +17,7 @@
 #include "stdint.h"
 #include "Adafruit_TFTShield18_Macros.h"
 #include "stm32h5xx_hal.h"
+#include <stdbool.h> // bool type started giving error for unknown reason
 
 #ifdef __cplusplus
 extern "C" {

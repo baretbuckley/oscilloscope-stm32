@@ -13,14 +13,14 @@
 #define GRAPH_RANGE_MAX 4095
 #define GRAPH_RANGE_MIN 0
 
-int init_graphics(SPI_HandleTypeDef &spiHandle);
+int init_graphics(SPI_HandleTypeDef *spiHandle, I2C_HandleTypeDef *i2cHandle);
 
 
 
 
 // Prepend new value to front of the graph
 // val is expected to be in range of GRAPH_RANGE
-void pushValue(uint_16_t val);
+void pushValue(uint16_t val);
 
 
 void displayGraph();

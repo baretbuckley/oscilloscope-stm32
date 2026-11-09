@@ -47,11 +47,27 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Src/dac.c
     Src/shell.c
+    Src/graphics_ctrl.c
+    Src/process_data.c 
+    
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_GFX.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_SPITFT.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_ST77xx.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_ST7735.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_ST7735_API.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Print.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_seesaw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_TFTShield18.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_TFTShield18_API.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/dwt_module.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/graphics
+
 )
 
 # Add project symbols (macros)
