@@ -57,6 +57,15 @@ static void cmd_help(void)
 #define HYST_MV 50U
 
 static size_t grabbed;
+
+/* gf2's waveform viewer reads float arrays only, capture_buf is raw counts */
+float scope_mv[CAPTURE_LEN];
+uint32_t scope_len;
+
+void __attribute__((noinline)) shell_grabbed(void)
+{
+  __asm volatile("");
+}
 static bool trig_on;
 static uint32_t trig_mv = VDDA_APPLI / 2U;
 static bool trig_rise = true;
@@ -147,6 +156,10 @@ static void cmd_grab(const char *arg)
     return;
   }
   grabbed = n;
+  for (size_t i = 0; i < n; i++)
+    scope_mv[i] = (float)capture_buf[i] * VDDA_APPLI / 4095.0f;
+  scope_len = (uint32_t)n;
+  shell_grabbed();
 
   uint32_t lo = 4095, hi = 0, sum = 0;
   for (size_t i = 0; i < n; i++) {
