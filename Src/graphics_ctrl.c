@@ -10,17 +10,17 @@ unsigned graphBitmapIndex = 0; // Index for treating graphBitmap as circular buf
 
 
 int init_graphics(SPI_HandleTypeDef *spiHandle, I2C_HandleTypeDef *i2cHandle) {
-    // printf("HCLK Frequency: %u Hz\n\r", HAL_RCC_GetHCLKFreq());
+    printf("HCLK Frequency: %u Hz\n\r", HAL_RCC_GetHCLKFreq());
 
-    // if(!DWT_CheckInitialized()) printf("DWT failed to initialize!\n\r");
+    if(!DWT_CheckInitialized()) printf("DWT failed to initialize!\n\r");
 
     TFTShield18_create(i2cHandle);
     if (!TFTShield18_begin())
     {
-        // printf("Failed to initialize TFT shield!\n\r");
+        printf("Failed to initialize TFT shield!\n\r");
         return -1;
     } else {
-        // printf("TFT shield initialized successfully!\n\r");
+        printf("TFT shield initialized successfully!\n\r");
     }
 
     TFTShield18_tftReset(true);

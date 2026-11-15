@@ -43,14 +43,14 @@ static void putc_raw(char c)
   USART2->TDR = (uint8_t)c;
 }
 
-/* syscalls.c sends printf here */
-int __io_putchar(int ch)
-{
-  if (ch == '\n')
-    putc_raw('\r');
-  putc_raw((char)ch);
-  return ch;
-}
+// /* syscalls.c sends printf here */
+// int __io_putchar(int ch)
+// {
+//   if (ch == '\n')
+//     putc_raw('\r');
+//   putc_raw((char)ch);
+//   return ch;
+// }
 
 /* -1 when nothing came in */
 static int getc_nb(void)
