@@ -45,10 +45,11 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
-    Src/dac.c
+    Src/capture.c
     Src/shell.c
     Src/graphics_ctrl.c
     Src/process_data.c 
+    Src/trigger.c
     
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_GFX.cpp
