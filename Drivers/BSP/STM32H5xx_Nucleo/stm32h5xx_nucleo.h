@@ -53,11 +53,11 @@ extern "C" {
 #define USE_STM32H5XX_NUCLEO
 #endif /* !defined (USE_STM32H5XX_NUCLEO) */
 
-#if !defined (USE_NUCLEO_144) && !defined (USE_NUCLEO_64) && !defined (USE_NUCLEO_H533RE) && !defined (USE_NUCLEO_H5E5ZJ) && !defined (USE_NUCLEO_H553ZG)
+#if !defined (USE_NUCLEO_144) && !defined (USE_NUCLEO_64) && !defined (USE_NUCLEO_H533RE)&& !defined (USE_NUCLEO_H5E5ZJ)
 #error "Board Pin number not defined!! Add USE_NUCLEO_144 or USE_NUCLEO_64 or USE_NUCLEO_H533RE or \
-        USE_NUCLEO_H5E5ZJ or USE_NUCLEO_H553ZG define in conf.h file"
+        USE_NUCLEO_H5E5ZJ define in conf.h file"
 #endif /* (!defined (USE_NUCLEO_144) && !defined (USE_NUCLEO_64) && !defined (USE_NUCLEO_H533RE) && \
-           !defined (USE_NUCLEO_H5E5ZJ) && !defined (USE_NUCLEO_H553ZG)) */
+           !defined (USE_NUCLEO_H5E5ZJ)) */
 
 
 /** @defgroup STM32H5XX_NUCLEO_LOW_LEVEL_Exported_Types LOW LEVEL Exported Types
@@ -165,10 +165,10 @@ typedef struct
   */
 
 /**
-  * @brief STM32H5XX NUCLEO BSP Driver version number V1.3.0
+  * @brief STM32H5XX NUCLEO BSP Driver version number V1.1.0
   */
 #define STM32H5XX_NUCLEO_BSP_VERSION_MAIN   (0x01UL) /*!< [31:24] main version */
-#define STM32H5XX_NUCLEO_BSP_VERSION_SUB1   (0x03UL) /*!< [23:16] sub1 version */
+#define STM32H5XX_NUCLEO_BSP_VERSION_SUB1   (0x01UL) /*!< [23:16] sub1 version */
 #define STM32H5XX_NUCLEO_BSP_VERSION_SUB2   (0x00UL) /*!< [15:8]  sub2 version */
 #define STM32H5XX_NUCLEO_BSP_VERSION_RC     (0x00UL) /*!< [7:0]  release candidate */
 #define STM32H5XX_NUCLEO_BSP_VERSION        ((STM32H5XX_NUCLEO_BSP_VERSION_MAIN << 24)\
@@ -224,15 +224,15 @@ typedef struct
 #define LED1_GPIO_CLK_ENABLE()                  __HAL_RCC_GPIOD_CLK_ENABLE()
 #define LED1_GPIO_CLK_DISABLE()                 __HAL_RCC_GPIOD_CLK_DISABLE()
 
-#define LED2_PIN                                GPIO_PIN_0
-#define LED2_GPIO_PORT                          GPIOA
-#define LED2_GPIO_CLK_ENABLE()                  __HAL_RCC_GPIOA_CLK_ENABLE()
-#define LED2_GPIO_CLK_DISABLE()                 __HAL_RCC_GPIOA_CLK_DISABLE()
+#define LED2_PIN                                GPIO_PIN_6
+#define LED2_GPIO_PORT                          GPIOC
+#define LED2_GPIO_CLK_ENABLE()                  __HAL_RCC_GPIOC_CLK_ENABLE()
+#define LED2_GPIO_CLK_DISABLE()                 __HAL_RCC_GPIOC_CLK_DISABLE()
 
-#define LED3_PIN                                GPIO_PIN_6
-#define LED3_GPIO_PORT                          GPIOC
-#define LED3_GPIO_CLK_ENABLE()                  __HAL_RCC_GPIOC_CLK_ENABLE()
-#define LED3_GPIO_CLK_DISABLE()                 __HAL_RCC_GPIOC_CLK_DISABLE()
+#define LED3_PIN                                GPIO_PIN_0
+#define LED3_GPIO_PORT                          GPIOA
+#define LED3_GPIO_CLK_ENABLE()                  __HAL_RCC_GPIOA_CLK_ENABLE()
+#define LED3_GPIO_CLK_DISABLE()                 __HAL_RCC_GPIOA_CLK_DISABLE()
 
 #else
 

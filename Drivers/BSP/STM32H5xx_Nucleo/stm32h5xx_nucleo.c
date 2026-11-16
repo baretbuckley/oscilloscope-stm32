@@ -210,21 +210,14 @@ int32_t BSP_LED_Init(Led_TypeDef Led)
     gpio_init_structure.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 
     HAL_GPIO_Init(LED_PORT[Led], &gpio_init_structure);
+    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
 
 #if defined (USE_NUCLEO_H5E5ZJ)
-    if (Led == LED1)
-    {
-      HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
-    }
-    else
+    if (Led != LED1)
     {
       HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_SET);
     }
-#elif defined (USE_NUCLEO_H553ZG)
-    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_SET);
-#else
-    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
-#endif /* USE_NUCLEO_H5E5ZJ */
+#endif /* USE_NUCLEO_H5E5ZJ*/
 
   }
 
@@ -289,20 +282,13 @@ int32_t BSP_LED_On(Led_TypeDef Led)
   }
   else
   {
+    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_SET);
 
 #if defined (USE_NUCLEO_H5E5ZJ)
-    if (Led == LED1)
-    {
-      HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_SET);
-    }
-    else
+    if (Led != LED1)
     {
       HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
     }
-#elif defined (USE_NUCLEO_H553ZG)
-    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
-#else
-    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_SET);
 #endif /* USE_NUCLEO_H5E5ZJ */
   }
 
@@ -332,21 +318,14 @@ int32_t BSP_LED_Off(Led_TypeDef Led)
   }
   else
   {
-
+    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
+    
 #if defined (USE_NUCLEO_H5E5ZJ)
-    if (Led == LED1)
-    {
-      HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
-    }
-    else
+    if (Led != LED1)
     {
       HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_SET);
     }
-#elif defined (USE_NUCLEO_H553ZG)
-    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_SET);
-#else
-    HAL_GPIO_WritePin(LED_PORT[Led], LED_PIN[Led], GPIO_PIN_RESET);
-#endif /* USE_NUCLEO_H5E5ZJ */
+#endif /* USE_NUCLEO_H5E5ZJ */   
   }
 
   return ret;
