@@ -28,6 +28,8 @@
 #include <process_data.h>
 #include <graphics_ctrl.h>
 #include <graph.h>
+#include <stdio.h>
+
 
 /* USER CODE END Includes */
 

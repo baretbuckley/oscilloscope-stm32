@@ -216,7 +216,6 @@ void GPDMA1_Channel0_IRQHandler(void)
   /* USER CODE END GPDMA1_Channel0_IRQn 0 */
   HAL_DMA_IRQHandler(&handle_GPDMA1_Channel0);
   /* USER CODE BEGIN GPDMA1_Channel0_IRQn 1 */
-  printf("GPDMA1_Channel0_IRQHandler\n");
 
   /* USER CODE END GPDMA1_Channel0_IRQn 1 */
 }
