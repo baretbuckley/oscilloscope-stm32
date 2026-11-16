@@ -246,12 +246,10 @@ int main(void)
       uint32_t input = TFTShield18_readButtons();
       bool receivedInput = false;
       if (!(input&TFTSHIELD_BUTTON_UP)) {
-        printf("button up\n");
         zoomDisplay(1.1);
         receivedInput = true;
       }
       if (!(input&TFTSHIELD_BUTTON_DOWN)) {
-        printf("button down\n");
         zoomDisplay(0.91);
         receivedInput = true;
       }
