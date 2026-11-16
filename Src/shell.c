@@ -19,14 +19,14 @@ static void putc_raw(char c)
   HAL_UART_Transmit(&huart2, (const uint8_t *)&c, 1, HAL_MAX_DELAY);
 }
 
-// /* syscalls.c sends printf here */
-// int __io_putchar(int ch)
-// {
-//   if (ch == '\n')
-//     putc_raw('\r');
-//   putc_raw((char)ch);
-//   return ch;
-// }
+/* syscalls.c sends printf here */
+int __io_putchar(int ch)
+{
+  if (ch == '\n')
+    putc_raw('\r');
+  putc_raw((char)ch);
+  return ch;
+}
 
 /* -1 when nothing came in. a zero timeout only looks, and returns before
    HAL would clear an overrun, so clear it here */

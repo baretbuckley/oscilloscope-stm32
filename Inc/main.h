@@ -29,9 +29,6 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h5xx_hal.h"
 
-#include "stm32h5xx_nucleo.h"
-#include <stdio.h>
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -66,6 +63,14 @@ void Error_Handler(void);
 #define DISP_DCX_SEL_GPIO_Port GPIOC
 #define DISP_CS_Pin GPIO_PIN_9
 #define DISP_CS_GPIO_Port GPIOC
+#define SWDIO_Pin GPIO_PIN_13
+#define SWDIO_GPIO_Port GPIOA
+#define SWCLK_Pin GPIO_PIN_14
+#define SWCLK_GPIO_Port GPIOA
+#define JTDI_Pin GPIO_PIN_15
+#define JTDI_GPIO_Port GPIOA
+#define SWO_Pin GPIO_PIN_3
+#define SWO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 /* Value of analog reference voltage (Vref+), connected to analog voltage   */

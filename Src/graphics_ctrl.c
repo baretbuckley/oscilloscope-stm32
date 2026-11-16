@@ -5,7 +5,7 @@
 
 
 // Graph state
-uint16_t graphBitmap[GRAPH_WIDTH][GRAPH_HEIGHT] = {0};
+uint16_t graphBitmap[GRAPH_HEIGHT][GRAPH_WIDTH] = {0};
 unsigned graphBitmapIndex = 0; // Index for treating graphBitmap as circular buffer
 
 
@@ -54,23 +54,25 @@ void pushValue(uint16_t val) {
     
     // set current index to 
     for (int i = 0; i < GRAPH_HEIGHT; i++)
-        graphBitmap[graphBitmapIndex][i] = 0;
+        graphBitmap[i][graphBitmapIndex] = 0;
     
     // Set pixel at height relative to value
     uint16_t scalledVal = scaleValue(val);
     if (scalledVal > GRAPH_HEIGHT) return; // Out of range, don't draw
-    graphBitmap[graphBitmapIndex][scalledVal] = GRAPH_COLOR;
+    graphBitmap[scalledVal][graphBitmapIndex] = GRAPH_COLOR;
 }
 
 
 void displayGraph() {
+    uint16_t (*tiltedGraph)[GRAPH_WIDTH] = graphBitmap;
+
     // Split draw into 2 calls given graphBitmap is circular buffer
-    Display_drawRGBBitmap(0, 0, graphBitmap[graphBitmapIndex], GRAPH_WIDTH-graphBitmapIndex, GRAPH_HEIGHT);
+    Display_drawRGBBitmap(0, 0, tiltedGraph[graphBitmapIndex], GRAPH_WIDTH-graphBitmapIndex, GRAPH_HEIGHT);
 
     // If index is zero, back split of buffer (0-index) is empty
     // Therefor second call to draw bitmap isn't needed
     if (graphBitmapIndex == 0) return;
 
     // Append at the end of the first bitmap draw
-    Display_drawRGBBitmap(GRAPH_WIDTH-graphBitmapIndex, 0, (uint16_t*)graphBitmap, graphBitmapIndex, GRAPH_HEIGHT);
+    Display_drawRGBBitmap(GRAPH_WIDTH-graphBitmapIndex, 0, (uint16_t*)tiltedGraph, graphBitmapIndex, GRAPH_HEIGHT);
 }

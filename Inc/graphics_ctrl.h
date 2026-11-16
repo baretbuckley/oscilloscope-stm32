@@ -10,7 +10,7 @@
 #define GRAPH_COLOR 0xf986; // R-31, G-12, B-6
 #define GRAPH_WIDTH 100
 #define GRAPH_HEIGHT 32
-#define GRAPH_RANGE_MAX 4095
+#define GRAPH_RANGE_MAX 3300
 #define GRAPH_RANGE_MIN 0
 
 int init_graphics(SPI_HandleTypeDef *spiHandle, I2C_HandleTypeDef *i2cHandle);
