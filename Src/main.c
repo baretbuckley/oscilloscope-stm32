@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "Adafruit_TFTShield18_Macros.h"
 #include "capture.h"
 #include "shell.h"
 #include <dwt_module.h>
@@ -218,8 +219,16 @@ int main(void)
   setTimeDomain(0.0, 1.0);
   resetDisplay();
 
+  uint32_t inputPollTime = HAL_GetTick();
+  DWT_delayMs(100);
+
+  printf("Time:\n");
+  printf("input time: %i %i\n", HAL_GetTick(), inputPollTime);
+
+
   while (1)
   {
+
     if (taskBuildGraph) {
       taskBuildGraph = false;
       buildGraph(capture_buf, scope_len);
@@ -229,9 +238,40 @@ int main(void)
       taskDisplayGraph = false;
       displayGraph();
     }
-    if (taskReceiveInput) {
-
+    if (HAL_GetTick() > inputPollTime) {
+      taskReceiveInput = true;
     }
+    if (taskReceiveInput) {
+      taskReceiveInput = false;
+      uint32_t input = TFTShield18_readButtons();
+      bool receivedInput = false;
+      if (!(input&TFTSHIELD_BUTTON_UP)) {
+        printf("button up\n");
+        zoomDisplay(1.1);
+        receivedInput = true;
+      }
+      if (!(input&TFTSHIELD_BUTTON_DOWN)) {
+        printf("button down\n");
+        zoomDisplay(0.91);
+        receivedInput = true;
+      }
+      if (!(input&TFTSHIELD_BUTTON_RIGHT)) {
+        shiftDisplay(0.01);
+        receivedInput = true;
+      }
+      if (!(input&TFTSHIELD_BUTTON_LEFT)) {
+        shiftDisplay(-0.01);
+        receivedInput = true;
+      }
+      if (receivedInput) {
+        taskBuildGraph = true;
+        inputPollTime += 100;
+      } else {
+        inputPollTime += 20;
+      }
+    }
+      
+
     shell_poll();
     /* USER CODE END WHILE */
 

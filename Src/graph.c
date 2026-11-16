@@ -52,10 +52,11 @@ void zoomDisplay(float scale) {
     if (scale < 0) return;
     displayDomainSize *= scale;
     if (scale > 1) {
-        if (displayDomainSize + displayOffset > xAxis.max) 
-            displayOffset = xAxis.max - displayOffset;
         if (displayDomainSize >= xAxis.max - xAxis.min)
             resetDisplay();
+        else if (displayDomainSize + displayOffset >= xAxis.max) 
+            displayOffset = xAxis.max - displayDomainSize;
+        
     }
 }
 void shiftDisplay(float shift) {
@@ -73,7 +74,6 @@ uint32_t mapIdx(float val, uint32_t range) {
 }
 
 void buildGraph(uint16_t *data, uint32_t len) {
-    printf("building graph with len %ui\n", len);
     // reset graph
     for (int x = 0; x < GRAPH_WIDTH; x++) 
         for (int y = 0; y < GRAPH_HEIGHT; y++)
@@ -83,19 +83,16 @@ void buildGraph(uint16_t *data, uint32_t len) {
     
     uint32_t to = mapIdx(displayOffset+displayDomainSize, len);
 
-    float xScale = (float)GRAPH_WIDTH / (float)(to-from);
-    float yScale = (float)GRAPH_HEIGHT / (float)(voltMax-1 - voltMin);
-    printf("Building graph from %i to %i.\n", from, to);
+    float xScale = (float)(GRAPH_WIDTH-1) / (float)(to-from);
+    float yScale = (float)(GRAPH_HEIGHT-1) / (float)(voltMax-1 - voltMin);
     for (int i = from; i < to; i++) {
         uint32_t gHeight = roundf((float)(data[i]-voltMin) * yScale); 
         if (gHeight >= voltMax) continue;
         uint32_t gIdx = roundf((i - from) * xScale);
 
-        if (gHeight >= GRAPH_HEIGHT) continue;
-        if (gIdx >= GRAPH_WIDTH) {
-            printf("Error: graph idx out of bounds\n");
-            continue;
-        }
+        if (gHeight >= GRAPH_HEIGHT) 
+            gHeight = GRAPH_HEIGHT-1;
+        if (gIdx >= GRAPH_WIDTH) continue;
         graphBitmap[gHeight][gIdx] = GRAPH_COLOR;
     }
 }

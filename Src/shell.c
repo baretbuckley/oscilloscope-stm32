@@ -238,22 +238,24 @@ void shell_init(int32_t (*read)(void))
 
 void shell_poll(void)
 {
-  int c = getc_nb();
+  int c;
+  int count = 0;
+  while((c = getc_nb()) != -1) {
+    count += 1;
 
-  if (c < 0)
-    return;
-
-  if (c == '\r' || c == '\n') {
-    printf("\n");
-    line[len] = '\0';
-    run(line);
-    len = 0;
-    printf("> ");
-  } else if ((c == '\b' || c == 0x7F) && len > 0) {
-    len--;
-    printf("\b \b");
-  } else if (c >= ' ' && c < 0x7F && len < sizeof line - 1) {
-    line[len++] = (char)c;
-    putc_raw((char)c);
+    if (c == '\r' || c == '\n') {
+      printf("\n");
+      line[len] = '\0';
+      run(line);
+      len = 0;
+      printf("> ");
+    } else if ((c == '\b' || c == 0x7F) && len > 0) {
+      len--;
+      printf("\b \b");
+    } else if (c >= ' ' && c < 0x7F && len < sizeof line - 1) {
+      line[len++] = (char)c;
+      putc_raw((char)c);
+    }
   }
+  if (count != 0) printf("%i\n", count);
 }
