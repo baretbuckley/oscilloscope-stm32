@@ -90,81 +90,109 @@ static uint32_t ms_for(uint32_t samples, uint32_t rate)
   return (uint32_t)((uint64_t)samples * 1000U / rate) + 2U;
 }
 
+/* one run, from starting the dma to the frame being in */
+struct run {
+  struct edge e;
+  uint32_t n, pre, post;
+  uint32_t written;     /* samples the dma wrote, never wraps in a run */
+  uint32_t scanned;     /* the edge search got this far */
+  uint32_t give_up_at;  /* no edge by this many samples: auto */
+  uint32_t edge_at;
+  bool found, triggered;
+};
+
+/* search what came in since the last step. true once the frame is in */
+static bool step(struct run *r)
+{
+  /* the edge can only come once the pre samples are in */
+  if (!r->found && (int32_t)(r->written - r->scanned) > 0) {
+    /* never look back more than half the ring. a frame from there still
+       fits, n being at most half the ring, and a pass stays short enough
+       that the dma cannot go a whole ring round unseen while it runs */
+    if (r->written - r->scanned > CAPTURE_RING / 2U)
+      r->scanned = r->written - CAPTURE_RING / 2U;
+    r->triggered = edge_find(&r->e, capture_buf, MASK, r->scanned,
+                             r->written, &r->edge_at);
+    r->found = r->triggered;
+    r->scanned = r->written;
+  }
+  if (!r->found && (int32_t)(r->written - r->give_up_at) >= 0) {
+    /* auto: no edge, take the newest samples */
+    r->edge_at = r->written;
+    r->found = true;
+  }
+  return r->found && r->written - r->edge_at >= r->post;
+}
+
+/* count what the dma wrote since the last look. it must not have gone a
+   whole ring further, the count cannot see that */
+static void catch_up(struct run *r)
+{
+  r->written += (ring_pos() - r->written) & MASK;
+}
+
+/* start TIM6, then read the dma position and search until the frame is
+   in. 0 when it is, -1 when the dma went quiet for limit ms */
+static int wait_run(struct run *r, uint32_t limit)
+{
+  /* the first conversion comes a full period after this */
+  __HAL_TIM_SET_COUNTER(&htim6, 0);
+  HAL_TIM_Base_Start(&htim6);
+  uint32_t since = HAL_GetTick();
+
+  for (;;) {
+    catch_up(r);
+    if (step(r))
+      return 0;
+    if (HAL_GetTick() - since > limit)
+      return -1;
+  }
+}
+
 int capture_run(const struct capture_trig *t, size_t n, size_t *at)
 {
   if (n == 0 || n > CAPTURE_LEN)
     n = CAPTURE_LEN;
 
-  uint32_t pre = t ? (t->pre < n ? t->pre : (uint32_t)n - 1U) : 0;
-  uint32_t post = (uint32_t)n - pre;
   uint32_t rate = capture_rate_hz();
-  struct edge e;
-
+  struct run r = {
+    .n = (uint32_t)n,
+    .pre = t ? (t->pre < n ? t->pre : (uint32_t)n - 1U) : 0,
+    .found = t == NULL,
+  };
+  r.post = r.n - r.pre;
+  r.scanned = r.pre;
+  /* counted in samples, so it holds however often the cpu looks */
+  r.give_up_at =
+      r.pre + (uint32_t)((uint64_t)CAPTURE_AUTO_MS * rate / 1000U);
   if (t)
-    edge_init(&e, t->level, t->hyst, t->rise);
+    edge_init(&r.e, t->level, t->hyst, t->rise);
+
+  /* the frame is in by give_up_at + post at the latest. a ring on top of
+     that, and the dma must have stopped */
+  uint32_t limit = ms_for(r.give_up_at + r.post + CAPTURE_RING, rate);
 
   /* HAL counts the length in samples and writes it into the node */
   if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)capture_buf, CAPTURE_RING) != HAL_OK)
     return -1;
-  __HAL_TIM_SET_COUNTER(&htim6, 0);
-  HAL_TIM_Base_Start(&htim6);
 
-  uint32_t written = 0, last = 0, scanned = pre, edge_at = 0;
-  bool found = t == NULL, triggered = false;
-  uint32_t since = HAL_GetTick();
-  uint32_t post_wait = ms_for(post, rate);
-  uint32_t wait = t ? ms_for(pre, rate) + CAPTURE_AUTO_MS : post_wait;
-  int ret = 0;
-
-  for (;;) {
-    uint32_t pos = ring_pos();
-    written += (pos - last) & MASK;
-    last = pos;
-
-    /* the edge can only come once the pre samples are in */
-    bool was = found;
-    if (!found && (int32_t)(written - scanned) > 0) {
-      /* never look so far back that the frame would be overwritten */
-      if (written - scanned > CAPTURE_RING - n)
-        scanned = written - (CAPTURE_RING - (uint32_t)n);
-      triggered = edge_find(&e, capture_buf, MASK, scanned, written, &edge_at);
-      found = triggered;
-      scanned = written;
-    }
-    if (!found && HAL_GetTick() - since > wait) {
-      /* auto: no edge, take the newest samples */
-      edge_at = written > pre ? written : pre;
-      found = true;
-    }
-    if (found && !was) {
-      since = HAL_GetTick();
-      wait = post_wait;
-    }
-
-    if (found && (int32_t)(written - edge_at) >= (int32_t)post)
-      break;
-    if (HAL_GetTick() - since > wait + 10U) {
-      ret = -1;
-      break;
-    }
-  }
+  int ret = wait_run(&r, limit);
 
   /* no more triggers, then count what came in meanwhile. one conversion
      may still be on its way, hence the one sample of slack below */
   HAL_TIM_Base_Stop(&htim6);
-  uint32_t pos = ring_pos();
-  written += (pos - last) & MASK;
+  catch_up(&r);
   HAL_ADC_Stop_DMA(&hadc1);
   if (ret < 0)
     return -1;
 
   /* check the dma did not lap the frame while the cpu looked away */
-  uint32_t start = edge_at - pre;
-  if (written - start >= CAPTURE_RING)
+  uint32_t start = r.edge_at - r.pre;
+  if (r.written - start >= CAPTURE_RING)
     return -1;
 
   rotate(start);
   if (at)
-    *at = pre;
-  return triggered ? 1 : 0;
+    *at = r.pre;
+  return r.triggered ? 1 : 0;
 }
