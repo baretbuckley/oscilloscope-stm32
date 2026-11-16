@@ -26,6 +26,7 @@
 #include <dwt_module.h>
 #include <process_data.h>
 #include <graphics_ctrl.h>
+#include <graph.h>
 
 /* USER CODE END Includes */
 
@@ -65,6 +66,9 @@ UART_HandleTypeDef huart2;
 uint32_t                 uhADCxConvertedData;
 /* Input voltage declaration */
 int32_t                  uhADCxConvertedData_Voltage_mVolt;
+bool taskBuildGraph = false;
+bool taskDisplayGraph = false;
+bool taskReceiveInput = true;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -203,15 +207,31 @@ int main(void)
 
   TFTShield18_setBacklight(TFTSHIELD_BACKLIGHT_ON);
 
-  for (int i = 0; i < GRAPH_WIDTH; i++) {
-    pushValue((((i/2)*(3300/GRAPH_HEIGHT)) % (3300)));
-  }
-  DWT_delayMs(100);
-  displayGraph();
-  DWT_delayMs(100);
+  // for (int i = 0; i < GRAPH_WIDTH; i++) {
+  //   pushValue((((i/2)*(3300/GRAPH_HEIGHT)) % (3300)));
+  // }
+  // DWT_delayMs(100);
+  // displayGraph();
+  // DWT_delayMs(100);
+
+  setVoltRange(0, 4000);
+  setTimeDomain(0.0, 1.0);
+  resetDisplay();
 
   while (1)
   {
+    if (taskBuildGraph) {
+      taskBuildGraph = false;
+      buildGraph(capture_buf, scope_len);
+      taskDisplayGraph = true;
+    }
+    if (taskDisplayGraph) {
+      taskDisplayGraph = false;
+      displayGraph();
+    }
+    if (taskReceiveInput) {
+
+    }
     shell_poll();
     /* USER CODE END WHILE */
 

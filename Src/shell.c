@@ -196,6 +196,8 @@ static void cmd_grab(const char *arg)
            (unsigned long)((uint64_t)(rises - 1) * rate / (last - first)));
   else
     printf("no full cycle in the window\n");
+
+  taskBuildGraph = true;
 }
 
 static void cmd_dump(void)
