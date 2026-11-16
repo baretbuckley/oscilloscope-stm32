@@ -1,5 +1,6 @@
 #include "capture.h"
 
+#include "cycles.h"
 #include "main.h"
 #include "trigger.h"
 
@@ -57,6 +58,14 @@ uint32_t capture_set_rate(uint32_t hz)
   return capture_rate_hz();
 }
 
+/* TIMING (PC5, CN10-6) is high while the cpu works on a run, in the edge
+   search and the rotate, so a logic analyzer sees what struct capture_time
+   counts */
+static void busy(bool on)
+{
+  TIMING_GPIO_Port->BSRR = on ? TIMING_Pin : (uint32_t)TIMING_Pin << 16;
+}
+
 /* where the dma writes next. BNDT counts the bytes left in the block and
    is reloaded from the node when the block ends */
 static uint32_t ring_pos(void)
@@ -99,6 +108,7 @@ struct run {
   uint32_t give_up_at;  /* no edge by this many samples: auto */
   uint32_t edge_at;
   bool found, triggered;
+  struct capture_time time;
 };
 
 /* search what came in since the last step. true once the frame is in */
@@ -111,8 +121,14 @@ static bool step(struct run *r)
        that the dma cannot go a whole ring round unseen while it runs */
     if (r->written - r->scanned > CAPTURE_RING / 2U)
       r->scanned = r->written - CAPTURE_RING / 2U;
+    busy(true);
+    uint32_t c = cycles_now();
     r->triggered = edge_find(&r->e, capture_buf, MASK, r->scanned,
                              r->written, &r->edge_at);
+    r->time.search += cycles_now() - c;
+    busy(false);
+    r->time.searched +=
+        (r->triggered ? r->edge_at + 1U : r->written) - r->scanned;
     r->found = r->triggered;
     r->scanned = r->written;
   }
@@ -142,6 +158,7 @@ static int wait_run(struct run *r, uint32_t limit)
 
   for (;;) {
     catch_up(r);
+    r->time.loops++;
     if (step(r))
       return 0;
     if (HAL_GetTick() - since > limit)
@@ -149,7 +166,8 @@ static int wait_run(struct run *r, uint32_t limit)
   }
 }
 
-int capture_run(const struct capture_trig *t, size_t n, size_t *at)
+int capture_run(const struct capture_trig *t, size_t n, size_t *at,
+                struct capture_time *tm)
 {
   if (n == 0 || n > CAPTURE_LEN)
     n = CAPTURE_LEN;
@@ -172,6 +190,9 @@ int capture_run(const struct capture_trig *t, size_t n, size_t *at)
      that, and the dma must have stopped */
   uint32_t limit = ms_for(r.give_up_at + r.post + CAPTURE_RING, rate);
 
+  cycles_init();
+  uint32_t t0 = cycles_now();
+
   /* HAL counts the length in samples and writes it into the node */
   if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)capture_buf, CAPTURE_RING) != HAL_OK)
     return -1;
@@ -191,7 +212,14 @@ int capture_run(const struct capture_trig *t, size_t n, size_t *at)
   if (r.written - start >= CAPTURE_RING)
     return -1;
 
+  busy(true);
+  uint32_t c = cycles_now();
   rotate(start);
+  r.time.rotate = cycles_now() - c;
+  busy(false);
+  r.time.total = cycles_now() - t0;
+  if (tm)
+    *tm = r.time;
   if (at)
     *at = r.pre;
   return r.triggered ? 1 : 0;

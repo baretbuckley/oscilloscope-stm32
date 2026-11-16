@@ -25,13 +25,24 @@ struct capture_trig {
   uint32_t pre;    /* samples kept from before the edge */
 };
 
+/* where a run's time went, in HCLK cycles (cycles.h) */
+struct capture_time {
+  uint32_t total;     /* dma start to the turned frame, wraps past 17 s */
+  uint32_t search;    /* inside edge_find */
+  uint32_t searched;  /* samples edge_find went through */
+  uint32_t loops;     /* times the cpu read the dma position */
+  uint32_t rotate;
+};
+
 /* fill capture_buf[0..n). with t NULL it takes the next n samples. with a
    trigger it waits for the edge, and if none comes within CAPTURE_AUTO_MS
    it takes what is there, like a scope's auto mode. 1 when it triggered
    (*at is the edge's index in the frame), 0 without a trigger, -1 when the
-   adc or dma stopped or the cpu fell a whole ring behind */
+   adc or dma stopped or the cpu fell a whole ring behind. tm, when not
+   NULL, gets the run's timing */
 #define CAPTURE_AUTO_MS 100U
-int capture_run(const struct capture_trig *t, size_t n, size_t *at);
+int capture_run(const struct capture_trig *t, size_t n, size_t *at,
+                struct capture_time *tm);
 
 /* samples per second, rounded to what TIM6 can divide to, and capped at
    what the ADC can convert */

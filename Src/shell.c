@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "capture.h"
+#include "cycles.h"
 #include "main.h"
 
 extern UART_HandleTypeDef huart2;
@@ -150,17 +151,21 @@ static void cmd_grab(const char *arg)
     .pre = (uint32_t)(n * pre_pct / 100U),
   };
   size_t at;
-  int got = capture_run(trig_on ? &t : NULL, n, &at);
+  struct capture_time tm;
+  int got = capture_run(trig_on ? &t : NULL, n, &at, &tm);
   if (got < 0) {
     printf("grab failed\n");
     return;
   }
   grabbed = n;
+  uint32_t c = cycles_now();
   for (size_t i = 0; i < n; i++)
     scope_mv[i] = (float)capture_buf[i] * VDDA_APPLI / 4095.0f;
   scope_len = (uint32_t)n;
+  uint32_t copy = cycles_now() - c;
   shell_grabbed();
 
+  c = cycles_now();
   uint32_t lo = 4095, hi = 0, sum = 0;
   for (size_t i = 0; i < n; i++) {
     uint32_t v = capture_buf[i];
@@ -182,6 +187,7 @@ static void cmd_grab(const char *arg)
       last = i;
     }
   }
+  uint32_t stats = cycles_now() - c;
 
   printf("%u samples at %lu Hz, %lu us\n", (unsigned)n, (unsigned long)rate,
          (unsigned long)((uint64_t)n * 1000000U / rate));
@@ -196,6 +202,18 @@ static void cmd_grab(const char *arg)
            (unsigned long)((uint64_t)(rises - 1) * rate / (last - first)));
   else
     printf("no full cycle in the window\n");
+
+  printf("took %lu us, %lu dma checks, rotate %lu us\n",
+         (unsigned long)cycles_to_us(tm.total), (unsigned long)tm.loops,
+         (unsigned long)cycles_to_us(tm.rotate));
+  if (tm.searched > 0) {
+    uint32_t per = (uint32_t)((uint64_t)tm.search * 100U / tm.searched);
+    printf("edge search %lu.%02lu cycles a sample over %lu samples\n",
+           (unsigned long)(per / 100U), (unsigned long)(per % 100U),
+           (unsigned long)tm.searched);
+  }
+  printf("float copy %lu us, stats %lu us\n", (unsigned long)cycles_to_us(copy),
+         (unsigned long)cycles_to_us(stats));
 }
 
 static void cmd_dump(void)

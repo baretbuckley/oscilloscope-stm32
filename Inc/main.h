@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define TIMING_Pin GPIO_PIN_5
+#define TIMING_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 /* Value of analog reference voltage (Vref+), connected to analog voltage   */
