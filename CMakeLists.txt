@@ -56,8 +56,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # Add project symbols (macros)
+option(SCOPE_IRQ "dma and uart interrupts drive the scope, the cpu sleeps in between" OFF)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+    SCOPE_IRQ=$<BOOL:${SCOPE_IRQ}>
 )
 
 # Remove wrong libob.a library dependency when using cpp files

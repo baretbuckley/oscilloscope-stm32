@@ -152,6 +152,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+#if SCOPE_IRQ
+    /* sleep until a byte, the dma or the 1 ms tick wakes it */
+    __WFI();
+#endif
   }
   /* USER CODE END 3 */
 }
@@ -291,7 +295,7 @@ static void MX_GPDMA1_Init(void)
   __HAL_RCC_GPDMA1_CLK_ENABLE();
 
   /* GPDMA1 interrupt Init */
-    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel0_IRQn);
 
   /* USER CODE BEGIN GPDMA1_Init 1 */

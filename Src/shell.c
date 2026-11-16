@@ -29,6 +29,39 @@ int __io_putchar(int ch)
   return ch;
 }
 
+#if SCOPE_IRQ
+
+/* USART2's interrupt drops each byte in rx, getc_nb takes them out */
+static uint8_t rx_byte;
+static volatile uint8_t rx[64];
+static volatile uint32_t rx_in, rx_out;
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart != &huart2)
+    return;
+  if (rx_in - rx_out < sizeof rx)
+    rx[rx_in++ % sizeof rx] = rx_byte;
+  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+}
+
+/* an overrun or a framing error ends the reception, start it again */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart2)
+    HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+}
+
+/* -1 when nothing came in */
+static int getc_nb(void)
+{
+  if (rx_in == rx_out)
+    return -1;
+  return rx[rx_out++ % sizeof rx];
+}
+
+#else
+
 /* -1 when nothing came in. a zero timeout only looks, and returns before
    HAL would clear an overrun, so clear it here */
 static int getc_nb(void)
@@ -40,6 +73,8 @@ static int getc_nb(void)
     return -1;
   return c;
 }
+
+#endif
 
 static void cmd_help(void)
 {
@@ -203,9 +238,12 @@ static void cmd_grab(const char *arg)
   else
     printf("no full cycle in the window\n");
 
-  printf("took %lu us, %lu dma checks, rotate %lu us\n",
+  printf("took %lu us, %lu dma %s, rotate %lu us\n",
          (unsigned long)cycles_to_us(tm.total), (unsigned long)tm.loops,
+         SCOPE_IRQ ? "interrupts" : "checks",
          (unsigned long)cycles_to_us(tm.rotate));
+  if (SCOPE_IRQ)
+    printf("in the dma interrupts %lu us\n", (unsigned long)cycles_to_us(tm.isr));
   if (tm.searched > 0) {
     uint32_t per = (uint32_t)((uint64_t)tm.search * 100U / tm.searched);
     printf("edge search %lu.%02lu cycles a sample over %lu samples\n",
@@ -249,6 +287,9 @@ static void run(char *cmd)
 void shell_init(int32_t (*read)(void))
 {
   read_mv = read;
+#if SCOPE_IRQ
+  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+#endif
   printf("\nscope shell, type help\n> ");
 }
 

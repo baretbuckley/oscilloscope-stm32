@@ -9,8 +9,6 @@
    prescaler come from the .ioc, change this with them */
 #define ADC_CYCLES 16U
 
-#define MASK (CAPTURE_RING - 1U)
-
 extern ADC_HandleTypeDef hadc1;
 extern TIM_HandleTypeDef htim6;
 
@@ -68,10 +66,10 @@ static void busy(bool on)
 
 /* where the dma writes next. BNDT counts the bytes left in the block and
    is reloaded from the node when the block ends */
-static uint32_t ring_pos(void)
+static uint32_t ring_pos(uint32_t ring)
 {
   uint32_t left = __HAL_DMA_GET_COUNTER(hadc1.DMA_Handle) / 2U;
-  return (CAPTURE_RING - left) & MASK;
+  return (ring - left) & (ring - 1U);
 }
 
 static void reverse(uint16_t *b, uint32_t i, uint32_t j)
@@ -84,14 +82,14 @@ static void reverse(uint16_t *b, uint32_t i, uint32_t j)
 }
 
 /* turn the ring left so start lands at 0 */
-static void rotate(uint32_t start)
+static void rotate(uint32_t start, uint32_t ring)
 {
   uint16_t *b = (uint16_t *)capture_buf;
 
-  start &= MASK;
+  start &= ring - 1U;
   reverse(b, 0, start);
-  reverse(b, start, CAPTURE_RING);
-  reverse(b, 0, CAPTURE_RING);
+  reverse(b, start, ring);
+  reverse(b, 0, ring);
 }
 
 static uint32_t ms_for(uint32_t samples, uint32_t rate)
@@ -99,10 +97,12 @@ static uint32_t ms_for(uint32_t samples, uint32_t rate)
   return (uint32_t)((uint64_t)samples * 1000U / rate) + 2U;
 }
 
-/* one run, from starting the dma to the frame being in */
+/* one run, from starting the dma to the frame being in. the polling loop,
+   or with SCOPE_IRQ the dma's half and full block interrupts, move it
+   along */
 struct run {
   struct edge e;
-  uint32_t n, pre, post;
+  uint32_t ring, n, pre, post;
   uint32_t written;     /* samples the dma wrote, never wraps in a run */
   uint32_t scanned;     /* the edge search got this far */
   uint32_t give_up_at;  /* no edge by this many samples: auto */
@@ -119,11 +119,11 @@ static bool step(struct run *r)
     /* never look back more than half the ring. a frame from there still
        fits, n being at most half the ring, and a pass stays short enough
        that the dma cannot go a whole ring round unseen while it runs */
-    if (r->written - r->scanned > CAPTURE_RING / 2U)
-      r->scanned = r->written - CAPTURE_RING / 2U;
+    if (r->written - r->scanned > r->ring / 2U)
+      r->scanned = r->written - r->ring / 2U;
     busy(true);
     uint32_t c = cycles_now();
-    r->triggered = edge_find(&r->e, capture_buf, MASK, r->scanned,
+    r->triggered = edge_find(&r->e, capture_buf, r->ring - 1U, r->scanned,
                              r->written, &r->edge_at);
     r->time.search += cycles_now() - c;
     busy(false);
@@ -144,16 +144,101 @@ static bool step(struct run *r)
    whole ring further, the count cannot see that */
 static void catch_up(struct run *r)
 {
-  r->written += (ring_pos() - r->written) & MASK;
+  r->written += (ring_pos(r->ring) - r->written) & (r->ring - 1U);
+}
+
+/* the first conversion comes a full period after this */
+static void start_tim6(void)
+{
+  __HAL_TIM_SET_COUNTER(&htim6, 0);
+  HAL_TIM_Base_Start(&htim6);
+}
+
+#if SCOPE_IRQ
+
+/* the cpu only hears from the dma every half ring, so the frame has to fit
+   in the other half with room to spare: a ring of at least four frames.
+   short grabs get a short ring so the interrupts come often enough */
+static uint32_t ring_for(uint32_t n)
+{
+  uint32_t ring = 256U;
+
+  while (ring < 4U * n && ring < CAPTURE_RING)
+    ring *= 2U;
+  return ring;
+}
+
+static struct run *volatile active;
+static volatile bool done;
+
+/* the dma wrote half the ring or the other half, on GPDMA1 channel 0's
+   interrupt. it counts from the dma's position: when the search runs
+   long, the next half can end before this returns and both come as one
+   interrupt */
+static void half_done(void)
+{
+  struct run *r = active;
+
+  if (r == NULL)
+    return;
+  uint32_t c = cycles_now();
+  catch_up(r);
+  r->time.loops++;
+  if (step(r)) {
+    HAL_TIM_Base_Stop(&htim6);
+    active = NULL;
+    done = true;
+  }
+  r->time.isr += cycles_now() - c;
+}
+
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  (void)hadc;
+  half_done();
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  (void)hadc;
+  half_done();
+}
+
+/* start TIM6, then sleep until the interrupts finish the run. 0 when they
+   did, -1 when the dma went quiet for limit ms */
+static int wait_run(struct run *r, uint32_t limit)
+{
+  /* before TIM6 starts, or the first half could come and go unseen */
+  done = false;
+  active = r;
+  start_tim6();
+  uint32_t since = HAL_GetTick();
+
+  while (!done) {
+    /* the dma, the uart and the 1 ms tick wake it */
+    __WFI();
+    if (HAL_GetTick() - since > limit) {
+      /* the dma interrupt runs above this, so it is never halfway */
+      active = NULL;
+      return -1;
+    }
+  }
+  return 0;
+}
+
+#else
+
+static uint32_t ring_for(uint32_t n)
+{
+  (void)n;
+  return CAPTURE_RING;
 }
 
 /* start TIM6, then read the dma position and search until the frame is
    in. 0 when it is, -1 when the dma went quiet for limit ms */
 static int wait_run(struct run *r, uint32_t limit)
 {
-  /* the first conversion comes a full period after this */
-  __HAL_TIM_SET_COUNTER(&htim6, 0);
-  HAL_TIM_Base_Start(&htim6);
+  start_tim6();
   uint32_t since = HAL_GetTick();
 
   for (;;) {
@@ -166,6 +251,8 @@ static int wait_run(struct run *r, uint32_t limit)
   }
 }
 
+#endif
+
 int capture_run(const struct capture_trig *t, size_t n, size_t *at,
                 struct capture_time *tm)
 {
@@ -174,6 +261,7 @@ int capture_run(const struct capture_trig *t, size_t n, size_t *at,
 
   uint32_t rate = capture_rate_hz();
   struct run r = {
+    .ring = ring_for((uint32_t)n),
     .n = (uint32_t)n,
     .pre = t ? (t->pre < n ? t->pre : (uint32_t)n - 1U) : 0,
     .found = t == NULL,
@@ -186,15 +274,15 @@ int capture_run(const struct capture_trig *t, size_t n, size_t *at,
   if (t)
     edge_init(&r.e, t->level, t->hyst, t->rise);
 
-  /* the frame is in by give_up_at + post at the latest. a ring on top of
-     that, and the dma must have stopped */
-  uint32_t limit = ms_for(r.give_up_at + r.post + CAPTURE_RING, rate);
+  /* the frame is in by give_up_at + post at the latest, SCOPE_IRQ a ring
+     later at most. a ring on top of that, and the dma must have stopped */
+  uint32_t limit = ms_for(r.give_up_at + r.post + 2U * r.ring, rate);
 
   cycles_init();
   uint32_t t0 = cycles_now();
 
   /* HAL counts the length in samples and writes it into the node */
-  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)capture_buf, CAPTURE_RING) != HAL_OK)
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)capture_buf, r.ring) != HAL_OK)
     return -1;
 
   int ret = wait_run(&r, limit);
@@ -209,12 +297,12 @@ int capture_run(const struct capture_trig *t, size_t n, size_t *at,
 
   /* check the dma did not lap the frame while the cpu looked away */
   uint32_t start = r.edge_at - r.pre;
-  if (r.written - start >= CAPTURE_RING)
+  if (r.written - start >= r.ring)
     return -1;
 
   busy(true);
   uint32_t c = cycles_now();
-  rotate(start);
+  rotate(start, r.ring);
   r.time.rotate = cycles_now() - c;
   busy(false);
   r.time.total = cycles_now() - t0;
