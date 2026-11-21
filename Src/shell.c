@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "capture.h"
+#include "cycles.h"
 #include "main.h"
 
 extern UART_HandleTypeDef huart2;
@@ -28,6 +29,39 @@ int __io_putchar(int ch)
   return ch;
 }
 
+#if SCOPE_IRQ
+
+/* USART2's interrupt drops each byte in rx, getc_nb takes them out */
+static uint8_t rx_byte;
+static volatile uint8_t rx[64];
+static volatile uint32_t rx_in, rx_out;
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart != &huart2)
+    return;
+  if (rx_in - rx_out < sizeof rx)
+    rx[rx_in++ % sizeof rx] = rx_byte;
+  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+}
+
+/* an overrun or a framing error ends the reception, start it again */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart2)
+    HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+}
+
+/* -1 when nothing came in */
+static int getc_nb(void)
+{
+  if (rx_in == rx_out)
+    return -1;
+  return rx[rx_out++ % sizeof rx];
+}
+
+#else
+
 /* -1 when nothing came in. a zero timeout only looks, and returns before
    HAL would clear an overrun, so clear it here */
 static int getc_nb(void)
@@ -39,6 +73,8 @@ static int getc_nb(void)
     return -1;
   return c;
 }
+
+#endif
 
 static void cmd_help(void)
 {
@@ -150,17 +186,21 @@ static void cmd_grab(const char *arg)
     .pre = (uint32_t)(n * pre_pct / 100U),
   };
   size_t at;
-  int got = capture_run(trig_on ? &t : NULL, n, &at);
+  struct capture_time tm;
+  int got = capture_run(trig_on ? &t : NULL, n, &at, &tm);
   if (got < 0) {
     printf("grab failed\n");
     return;
   }
   grabbed = n;
+  uint32_t c = cycles_now();
   for (size_t i = 0; i < n; i++)
     scope_mv[i] = (float)capture_buf[i] * VDDA_APPLI / 4095.0f;
   scope_len = (uint32_t)n;
+  uint32_t copy = cycles_now() - c;
   shell_grabbed();
 
+  c = cycles_now();
   uint32_t lo = 4095, hi = 0, sum = 0;
   for (size_t i = 0; i < n; i++) {
     uint32_t v = capture_buf[i];
@@ -182,6 +222,7 @@ static void cmd_grab(const char *arg)
       last = i;
     }
   }
+  uint32_t stats = cycles_now() - c;
 
   printf("%u samples at %lu Hz, %lu us\n", (unsigned)n, (unsigned long)rate,
          (unsigned long)((uint64_t)n * 1000000U / rate));
@@ -197,7 +238,23 @@ static void cmd_grab(const char *arg)
   else
     printf("no full cycle in the window\n");
 
+  printf("took %lu us, %lu dma %s, rotate %lu us\n",
+         (unsigned long)cycles_to_us(tm.total), (unsigned long)tm.loops,
+         SCOPE_IRQ ? "interrupts" : "checks",
+         (unsigned long)cycles_to_us(tm.rotate));
+  if (SCOPE_IRQ)
+    printf("in the dma interrupts %lu us\n", (unsigned long)cycles_to_us(tm.isr));
+  if (tm.searched > 0) {
+    uint32_t per = (uint32_t)((uint64_t)tm.search * 100U / tm.searched);
+    printf("edge search %lu.%02lu cycles a sample over %lu samples\n",
+           (unsigned long)(per / 100U), (unsigned long)(per % 100U),
+           (unsigned long)tm.searched);
+  }
+  printf("float copy %lu us, stats %lu us\n", (unsigned long)cycles_to_us(copy),
+         (unsigned long)cycles_to_us(stats));
+  
   taskBuildGraph = true;
+  
 }
 
 static void cmd_dump(void)
@@ -233,6 +290,9 @@ static void run(char *cmd)
 void shell_init(int32_t (*read)(void))
 {
   read_mv = read;
+#if SCOPE_IRQ
+  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+#endif
   printf("\nscope shell, type help\n> ");
 }
 

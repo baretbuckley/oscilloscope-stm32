@@ -23,6 +23,20 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "Debug-irq",
+            "inherits": "Debug",
+            "cacheVariables": {
+                "SCOPE_IRQ": "ON"
+            }
+        },
+        {
+            "name": "Release-irq",
+            "inherits": "Release",
+            "cacheVariables": {
+                "SCOPE_IRQ": "ON"
+            }
         }
     ],
     "buildPresets": [
@@ -33,6 +47,14 @@
         {
             "name": "Release",
             "configurePreset": "Release"
+        },
+        {
+            "name": "Debug-irq",
+            "configurePreset": "Debug-irq"
+        },
+        {
+            "name": "Release-irq",
+            "configurePreset": "Release-irq"
         }
     ]
 }

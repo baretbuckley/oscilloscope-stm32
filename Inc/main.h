@@ -28,11 +28,10 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h5xx_hal.h"
-#include <stdbool.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -63,6 +62,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define Test_Pin_Pin GPIO_PIN_4
 #define Test_Pin_GPIO_Port GPIOC
+#define TIMING_Pin GPIO_PIN_5
+#define TIMING_GPIO_Port GPIOC
 #define DISP_DCX_SEL_Pin GPIO_PIN_7
 #define DISP_DCX_SEL_GPIO_Port GPIOC
 #define DISP_CS_Pin GPIO_PIN_9

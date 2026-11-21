@@ -1,8 +1,9 @@
 # build, flash and debug the scope. pyocd reads its pack and target from
-# pyocd.yaml, so run these from the repo root
+# pyocd.yaml, so run these from the repo root. mode is a preset from
+# CMakePresets.json: Debug, Release, or Debug-irq and Release-irq for the
+# interrupt driven build
 
 mode := "Debug"
-elf := "build/" + mode + "/oscilloscope-stm32.elf"
 pack_url := "https://github.com/Open-CMSIS-Pack/STM32H5xx_DFP/releases/download/v2.3.1/Keil.STM32H5xx_DFP.2.3.1.pack"
 
 _default:
@@ -23,13 +24,13 @@ flash mode=mode: (build mode) pack
 
 # flash and open gf2 halted at reset, with a breakpoint in shell_grabbed so
 # every grab stops there. press continue in gf2 to start the board
-debug: (build "Debug") pack
+debug mode=mode: (build mode) pack
     #!/usr/bin/env bash
     set -euo pipefail
     pyocd gdbserver --persist >/tmp/pyocd-gdbserver.log 2>&1 &
     trap 'kill $!' EXIT
     sleep 1
-    gf2 {{ elf }} -ex 'target extended-remote :3333' -ex load \
+    gf2 build/{{ mode }}/oscilloscope-stm32.elf -ex 'target extended-remote :3333' -ex load \
         -ex 'monitor reset halt' -ex 'break shell_grabbed'
 
 # gdb server on :3333 for a debugger of your own

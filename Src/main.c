@@ -97,7 +97,7 @@ static int32_t adc_read_mv(void)
 {
   uint32_t sum = 0;
 
-  if (capture_run(NULL, ADC_AVERAGE, NULL) < 0)
+  if (capture_run(NULL, ADC_AVERAGE, NULL, NULL) < 0)
   {
     Error_Handler();
   }
@@ -181,7 +181,7 @@ int main(void)
 
 
 
-  printf("HCLK Frequency: %u Hz\n\r", HAL_RCC_GetHCLKFreq());
+  printf("HCLK Frequency: %lu Hz\n\r", HAL_RCC_GetHCLKFreq());
 
   if(!DWT_CheckInitialized()) printf("DWT failed to initialize!\n\r");
 
@@ -225,7 +225,7 @@ int main(void)
   DWT_delayMs(100);
 
   printf("Time:\n");
-  printf("input time: %i %i\n", HAL_GetTick(), inputPollTime);
+  printf("input time: %li %li\n", HAL_GetTick(), inputPollTime);
 
 
   while (1)
@@ -276,6 +276,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+#if SCOPE_IRQ
+    /* sleep until a byte, the dma or the 1 ms tick wakes it */
+    __WFI();
+#endif
   }
   /* USER CODE END 3 */
 }
@@ -415,7 +419,7 @@ static void MX_GPDMA1_Init(void)
   __HAL_RCC_GPDMA1_CLK_ENABLE();
 
   /* GPDMA1 interrupt Init */
-    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel0_IRQn);
     HAL_NVIC_SetPriority(GPDMA1_Channel5_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel5_IRQn);
@@ -661,13 +665,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, Test_Pin_Pin|DISP_DCX_SEL_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, Test_Pin_Pin|TIMING_Pin|DISP_DCX_SEL_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DISP_CS_GPIO_Port, DISP_CS_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : Test_Pin_Pin DISP_DCX_SEL_Pin */
-  GPIO_InitStruct.Pin = Test_Pin_Pin|DISP_DCX_SEL_Pin;
+  /*Configure GPIO pins : Test_Pin_Pin TIMING_Pin DISP_DCX_SEL_Pin */
+  GPIO_InitStruct.Pin = Test_Pin_Pin|TIMING_Pin|DISP_DCX_SEL_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
