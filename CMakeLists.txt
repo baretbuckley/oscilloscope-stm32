@@ -57,9 +57,11 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add project symbols (macros)
 option(SCOPE_IRQ "dma and uart interrupts drive the scope, the cpu sleeps in between" OFF)
+option(SCOPE_GF2 "copy each grab into a float array in mV for gf2's waveform viewer" ON)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
     SCOPE_IRQ=$<BOOL:${SCOPE_IRQ}>
+    SCOPE_GF2=$<BOOL:${SCOPE_GF2}>
 )
 
 # Remove wrong libob.a library dependency when using cpp files

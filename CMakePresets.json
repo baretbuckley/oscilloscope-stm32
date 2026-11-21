@@ -21,7 +21,8 @@
             "name": "Release",
             "inherits": "default",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "SCOPE_GF2": "OFF"
             }
         },
         {

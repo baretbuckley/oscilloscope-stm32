@@ -94,9 +94,11 @@ static void cmd_help(void)
 
 static size_t grabbed;
 
+#if SCOPE_GF2
 /* gf2's waveform viewer reads float arrays only, capture_buf is raw counts */
 float scope_mv[CAPTURE_LEN];
 uint32_t scope_len;
+#endif
 
 void __attribute__((noinline)) shell_grabbed(void)
 {
@@ -193,14 +195,16 @@ static void cmd_grab(const char *arg)
     return;
   }
   grabbed = n;
-  uint32_t c = cycles_now();
+#if SCOPE_GF2
+  uint32_t t0 = cycles_now();
   for (size_t i = 0; i < n; i++)
     scope_mv[i] = (float)capture_buf[i] * VDDA_APPLI / 4095.0f;
   scope_len = (uint32_t)n;
-  uint32_t copy = cycles_now() - c;
+  uint32_t copy = cycles_now() - t0;
+#endif
   shell_grabbed();
 
-  c = cycles_now();
+  uint32_t c = cycles_now();
   uint32_t lo = 4095, hi = 0, sum = 0;
   for (size_t i = 0; i < n; i++) {
     uint32_t v = capture_buf[i];
@@ -250,8 +254,10 @@ static void cmd_grab(const char *arg)
            (unsigned long)(per / 100U), (unsigned long)(per % 100U),
            (unsigned long)tm.searched);
   }
-  printf("float copy %lu us, stats %lu us\n", (unsigned long)cycles_to_us(copy),
-         (unsigned long)cycles_to_us(stats));
+#if SCOPE_GF2
+  printf("float copy %lu us\n", (unsigned long)cycles_to_us(copy));
+#endif
+  printf("stats %lu us\n", (unsigned long)cycles_to_us(stats));
 }
 
 static void cmd_dump(void)
