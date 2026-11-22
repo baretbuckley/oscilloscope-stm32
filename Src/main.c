@@ -153,7 +153,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 #if SCOPE_IRQ
-    /* sleep until a byte, the dma or the 1 ms tick wakes it */
+    /* sleep until a byte in or out, the dma or the 1 ms tick wakes it */
     __WFI();
 #endif
   }

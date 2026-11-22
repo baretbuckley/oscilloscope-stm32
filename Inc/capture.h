@@ -55,6 +55,17 @@ struct capture_time {
 int capture_run(const struct capture_trig *t, size_t n, size_t *at,
                 struct capture_time *tm);
 
+/* capture_run in two halves, so main can do other work meanwhile.
+   capture_start starts a run: 0, or -1 when one is already going or the
+   dma would not start. capture_poll returns CAPTURE_RUNNING until the run
+   is over, then what capture_run would. without SCOPE_IRQ each call is one
+   look at the dma, so call it on every pass of main */
+#define CAPTURE_RUNNING 2
+int capture_start(const struct capture_trig *t, size_t n);
+int capture_poll(size_t *at, struct capture_time *tm);
+/* end a run early, capture_buf holds nothing useful after */
+void capture_abort(void);
+
 /* samples per second, rounded to what TIM6 can divide to, and capped at
    what the ADC can convert */
 uint32_t capture_set_rate(uint32_t hz);

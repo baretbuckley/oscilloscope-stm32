@@ -15,9 +15,57 @@ static int32_t (*read_mv)(void);
 static char line[64];
 static size_t len;
 
+/* what the shell is doing between passes of main. a grab waits on the dma
+   and a dump on the uart, and neither holds main up while it does */
+static enum { IDLE, GRABBING, DUMPING } state;
+
+/* bytes on their way out. printf fills tx from main and USART2's interrupt
+   sends it, one stretch up to the end of the array at a time. head and
+   tail count up forever, the index is that modulo the size */
+static uint8_t tx[1024];
+static volatile uint32_t tx_head, tx_tail;
+static volatile uint32_t tx_sending; /* bytes in the transfer going, 0 idle */
+
+/* start the next stretch. from the interrupt, or with it off */
+static void tx_next(void)
+{
+  uint32_t tail = tx_tail, n = tx_head - tail, at = tail % sizeof tx;
+
+  if (n > sizeof tx - at)
+    n = sizeof tx - at;
+  tx_sending = n;
+  /* refused, the next putc_raw tries again */
+  if (n > 0 && HAL_UART_Transmit_IT(&huart2, &tx[at], (uint16_t)n) != HAL_OK)
+    tx_sending = 0;
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart != &huart2)
+    return;
+  tx_tail += tx_sending;
+  tx_next();
+}
+
+static uint32_t tx_room(void)
+{
+  return sizeof tx - (tx_head - tx_tail);
+}
+
+/* waits only when tx is full, while the interrupt empties it */
 static void putc_raw(char c)
 {
-  HAL_UART_Transmit(&huart2, (const uint8_t *)&c, 1, HAL_MAX_DELAY);
+  while (tx_room() == 0) {
+  }
+  tx[tx_head % sizeof tx] = (uint8_t)c;
+  tx_head++;
+  /* the interrupt could end the last stretch between the test and the
+     start, so neither may run without the other */
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  if (tx_sending == 0)
+    tx_next();
+  __set_PRIMASK(primask);
 }
 
 /* syscalls.c sends printf here */
@@ -29,19 +77,23 @@ int __io_putchar(int ch)
   return ch;
 }
 
-#if SCOPE_IRQ
-
 /* USART2's interrupt drops each byte in rx, getc_nb takes them out */
 static uint8_t rx_byte;
 static volatile uint8_t rx[64];
 static volatile uint32_t rx_in, rx_out;
+static volatile bool rx_lost; /* a byte came with rx full */
+static volatile bool rx_cancel; /* ctrl-c, kept out of rx */
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart != &huart2)
     return;
-  if (rx_in - rx_out < sizeof rx)
+  if (rx_byte == 0x03)
+    rx_cancel = true;
+  else if (rx_in - rx_out < sizeof rx)
     rx[rx_in++ % sizeof rx] = rx_byte;
+  else
+    rx_lost = true;
   HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
 }
 
@@ -60,22 +112,6 @@ static int getc_nb(void)
   return rx[rx_out++ % sizeof rx];
 }
 
-#else
-
-/* -1 when nothing came in. a zero timeout only looks, and returns before
-   HAL would clear an overrun, so clear it here */
-static int getc_nb(void)
-{
-  uint8_t c;
-
-  __HAL_UART_CLEAR_FLAG(&huart2, UART_CLEAR_OREF);
-  if (HAL_UART_Receive(&huart2, &c, 1, 0) != HAL_OK)
-    return -1;
-  return c;
-}
-
-#endif
-
 static void cmd_help(void)
 {
   printf("help                 this\n"
@@ -85,7 +121,8 @@ static void cmd_help(void)
          "                     show or set the trigger level and edge\n"
          "pre [percent]        how much of a grab comes before the trigger\n"
          "grab [n]             take n samples of A1, %u at most\n"
-         "dump                 the last grab in mV, one per line\n",
+         "dump                 the last grab in mV, one per line\n"
+         "ctrl-c               stop a grab or a dump\n",
          CAPTURE_LEN);
 }
 
@@ -173,10 +210,13 @@ static void cmd_pre(const char *arg)
 
 /* min, max, mean, and the frequency from rising crossings of the middle.
    the 1/8 of the swing either side keeps noise from counting twice */
+/* what grab_done needs from cmd_grab */
+static size_t grab_n;
+static uint32_t grab_rate;
+
 static void cmd_grab(const char *arg)
 {
   size_t n = (size_t)strtoul(arg, NULL, 10);
-  uint32_t rate = capture_rate_hz();
 
   if (n == 0 || n > CAPTURE_LEN)
     n = CAPTURE_LEN;
@@ -187,13 +227,33 @@ static void cmd_grab(const char *arg)
     .rise = trig_rise,
     .pre = (uint32_t)(n * pre_pct / 100U),
   };
-  size_t at;
-  struct capture_time tm;
-  int got = capture_run(trig_on ? &t : NULL, n, &at, &tm);
-  if (got < 0) {
+  /* a failed run leaves the ring unturned, nothing to dump */
+  grabbed = 0;
+  if (capture_start(trig_on ? &t : NULL, n) < 0) {
     printf("grab failed\n");
     return;
   }
+  grab_n = n;
+  grab_rate = capture_rate_hz();
+  state = GRABBING;
+}
+
+/* on every pass of main while a grab runs. the report once it is over */
+static void grab_done(void)
+{
+  size_t at;
+  struct capture_time tm;
+  int got = capture_poll(&at, &tm);
+
+  if (got == CAPTURE_RUNNING)
+    return;
+  state = IDLE;
+  if (got < 0) {
+    printf("grab failed\n> ");
+    return;
+  }
+  size_t n = grab_n;
+  uint32_t rate = grab_rate;
   grabbed = n;
 #if SCOPE_GF2
   uint32_t t0 = cycles_now();
@@ -257,13 +317,28 @@ static void cmd_grab(const char *arg)
 #if SCOPE_GF2
   printf("float copy %lu us\n", (unsigned long)cycles_to_us(copy));
 #endif
-  printf("stats %lu us\n", (unsigned long)cycles_to_us(stats));
+  printf("stats %lu us\n> ", (unsigned long)cycles_to_us(stats));
 }
+
+/* a whole dump is about 20 KB, near 2 s at 115200. it goes a few lines a
+   pass of main, as fast as tx empties */
+static size_t dump_at;
 
 static void cmd_dump(void)
 {
-  for (size_t i = 0; i < grabbed; i++)
-    printf("%lu\n", (unsigned long)to_mv(capture_buf[i]));
+  dump_at = 0;
+  state = DUMPING;
+}
+
+static void dump_more(void)
+{
+  /* "4095\r\n" is the longest line */
+  while (dump_at < grabbed && tx_room() >= 6)
+    printf("%lu\n", (unsigned long)to_mv(capture_buf[dump_at++]));
+  if (dump_at == grabbed) {
+    state = IDLE;
+    printf("> ");
+  }
 }
 
 static void run(char *cmd)
@@ -288,35 +363,63 @@ static void run(char *cmd)
     cmd_dump();
   else if (cmd[0] != '\0')
     printf("%s? try help\n", cmd);
+  /* a grab or a dump prints the prompt when it is over */
+  if (state == IDLE)
+    printf("> ");
 }
 
 void shell_init(int32_t (*read)(void))
 {
   read_mv = read;
-#if SCOPE_IRQ
+  /* newlib holds a line until '\n'. the prompt and the backspace echo have
+     none, and putc_raw buffers anyway */
+  setvbuf(stdout, NULL, _IONBF, 0);
   HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
-#endif
   printf("\nscope shell, type help\n> ");
 }
 
+/* typed bytes wait in rx while a grab or a dump runs. otherwise it takes
+   all that came in since the last pass, so a slow pass loses nothing */
 void shell_poll(void)
 {
-  int c = getc_nb();
-
-  if (c < 0)
-    return;
-
-  if (c == '\r' || c == '\n') {
-    printf("\n");
-    line[len] = '\0';
-    run(line);
+  if (rx_cancel) {
+    /* ctrl-c ends a grab, a dump or the line being typed */
+    rx_cancel = false;
+    if (state == GRABBING) {
+      capture_abort();
+      grabbed = 0;
+    }
+    state = IDLE;
     len = 0;
-    printf("> ");
-  } else if ((c == '\b' || c == 0x7F) && len > 0) {
-    len--;
-    printf("\b \b");
-  } else if (c >= ' ' && c < 0x7F && len < sizeof line - 1) {
-    line[len++] = (char)c;
-    putc_raw((char)c);
+    printf("^C\n> ");
+  }
+
+  if (state == GRABBING)
+    grab_done();
+  else if (state == DUMPING)
+    dump_more();
+
+  if (state == IDLE && rx_lost) {
+    /* what is in rx is the start of a line with its middle missing */
+    rx_lost = false;
+    rx_out = rx_in;
+    len = 0;
+    printf("\ntyped too much while busy, input dropped\n> ");
+  }
+
+  int c;
+  while (state == IDLE && (c = getc_nb()) >= 0) {
+    if (c == '\r' || c == '\n') {
+      printf("\n");
+      line[len] = '\0';
+      len = 0;
+      run(line);
+    } else if ((c == '\b' || c == 0x7F) && len > 0) {
+      len--;
+      printf("\b \b");
+    } else if (c >= ' ' && c < 0x7F && len < sizeof line - 1) {
+      line[len++] = (char)c;
+      putc_raw((char)c);
+    }
   }
 }

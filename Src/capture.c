@@ -119,8 +119,11 @@ static bool step(struct run *r)
     /* never look back more than half the ring. a frame from there still
        fits, n being at most half the ring, and a pass stays short enough
        that the dma cannot go a whole ring round unseen while it runs */
-    if (r->written - r->scanned > r->ring / 2U)
+    if (r->written - r->scanned > r->ring / 2U) {
       r->scanned = r->written - r->ring / 2U;
+      /* armed was seen before the gap, not just before scanned */
+      r->e.armed = false;
+    }
     busy(true);
     uint32_t c = cycles_now();
     r->triggered = edge_find(&r->e, capture_buf, r->ring - 1U, r->scanned,
@@ -146,6 +149,11 @@ static void catch_up(struct run *r)
 {
   r->written += (ring_pos(r->ring) - r->written) & (r->ring - 1U);
 }
+
+/* the run going on, and what capture_poll needs to end it */
+static struct run cur;
+static bool running;
+static uint32_t since, limit, t0;
 
 /* the first conversion comes a full period after this */
 static void start_tim6(void)
@@ -204,26 +212,25 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   half_done();
 }
 
-/* start TIM6, then sleep until the interrupts finish the run. 0 when they
-   did, -1 when the dma went quiet for limit ms */
-static int wait_run(struct run *r, uint32_t limit)
+/* checked from main. the dma interrupt sets done, so with it set the run
+   is over */
+static bool finished(void)
 {
-  /* before TIM6 starts, or the first half could come and go unseen */
+  return done;
+}
+
+/* before TIM6 starts, or the first half could come and go unseen */
+static void start_run(struct run *r)
+{
   done = false;
   active = r;
   start_tim6();
-  uint32_t since = HAL_GetTick();
+}
 
-  while (!done) {
-    /* the dma, the uart and the 1 ms tick wake it */
-    __WFI();
-    if (HAL_GetTick() - since > limit) {
-      /* the dma interrupt runs above this, so it is never halfway */
-      active = NULL;
-      return -1;
-    }
-  }
-  return 0;
+/* the dma went quiet. it runs above main, so it is never halfway */
+static void drop_run(void)
+{
+  active = NULL;
 }
 
 #else
@@ -234,81 +241,159 @@ static uint32_t ring_for(uint32_t n)
   return CAPTURE_RING;
 }
 
-/* start TIM6, then read the dma position and search until the frame is
-   in. 0 when it is, -1 when the dma went quiet for limit ms */
-static int wait_run(struct run *r, uint32_t limit)
-{
-  start_tim6();
-  uint32_t since = HAL_GetTick();
+/* catch_up cannot tell a look a whole ring late from one on time, the
+   position is the same. the dma's half and full interrupts can: they come
+   every half ring whatever main does. this counts them */
+static volatile uint32_t halves;
+static bool lost;
 
-  for (;;) {
-    catch_up(r);
-    r->time.loops++;
-    if (step(r))
-      return 0;
-    if (HAL_GetTick() - since > limit)
-      return -1;
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  (void)hadc;
+  halves++;
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  (void)hadc;
+  halves++;
+}
+
+/* one look at the dma position and a search of what is new. true once the
+   frame is in, or once a lap went by unseen (lost) */
+static bool finished(void)
+{
+  /* halves first: one that ends after this read is in written anyway */
+  uint32_t h = halves;
+
+  catch_up(&cur);
+  cur.time.loops++;
+  /* written misses a whole ring, two halves, when a lap went unseen. one
+     half of slack for the interrupt still waiting to run */
+  if (h > cur.written / (cur.ring / 2U) + 1U) {
+    lost = true;
+    return true;
   }
+  return step(&cur);
+}
+
+static void start_run(struct run *r)
+{
+  (void)r;
+  halves = 0;
+  lost = false;
+  start_tim6();
+}
+
+static void drop_run(void)
+{
 }
 
 #endif
 
-int capture_run(const struct capture_trig *t, size_t n, size_t *at,
-                struct capture_time *tm)
+int capture_start(const struct capture_trig *t, size_t n)
 {
+  if (running)
+    return -1;
   if (n == 0 || n > CAPTURE_LEN)
     n = CAPTURE_LEN;
 
   uint32_t rate = capture_rate_hz();
-  struct run r = {
+  cur = (struct run){
     .ring = ring_for((uint32_t)n),
     .n = (uint32_t)n,
     .pre = t ? (t->pre < n ? t->pre : (uint32_t)n - 1U) : 0,
     .found = t == NULL,
   };
-  r.post = r.n - r.pre;
-  r.scanned = r.pre;
+  cur.post = cur.n - cur.pre;
+  cur.scanned = cur.pre;
   /* counted in samples, so it holds however often the cpu looks */
-  r.give_up_at =
-      r.pre + (uint32_t)((uint64_t)CAPTURE_AUTO_MS * rate / 1000U);
+  cur.give_up_at =
+      cur.pre + (uint32_t)((uint64_t)CAPTURE_AUTO_MS * rate / 1000U);
   if (t)
-    edge_init(&r.e, t->level, t->hyst, t->rise);
+    edge_init(&cur.e, t->level, t->hyst, t->rise);
 
   /* the frame is in by give_up_at + post at the latest, SCOPE_IRQ a ring
      later at most. a ring on top of that, and the dma must have stopped */
-  uint32_t limit = ms_for(r.give_up_at + r.post + 2U * r.ring, rate);
+  limit = ms_for(cur.give_up_at + cur.post + 2U * cur.ring, rate);
 
   cycles_init();
-  uint32_t t0 = cycles_now();
+  t0 = cycles_now();
 
   /* HAL counts the length in samples and writes it into the node */
-  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)capture_buf, r.ring) != HAL_OK)
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)capture_buf, cur.ring) != HAL_OK)
     return -1;
+  running = true;
+  start_run(&cur);
+  since = HAL_GetTick();
+  return 0;
+}
 
-  int ret = wait_run(&r, limit);
+int capture_poll(size_t *at, struct capture_time *tm)
+{
+  if (!running)
+    return -1;
+  int ret = 0;
+  if (!finished()) {
+    if (HAL_GetTick() - since <= limit)
+      return CAPTURE_RUNNING;
+    drop_run();
+    ret = -1;
+  }
+#if !SCOPE_IRQ
+  if (lost)
+    ret = -1;
+#endif
+  running = false;
 
   /* no more triggers, then count what came in meanwhile. one conversion
      may still be on its way, hence the one sample of slack below */
   HAL_TIM_Base_Stop(&htim6);
-  catch_up(&r);
+  catch_up(&cur);
   HAL_ADC_Stop_DMA(&hadc1);
   if (ret < 0)
     return -1;
 
   /* check the dma did not lap the frame while the cpu looked away */
-  uint32_t start = r.edge_at - r.pre;
-  if (r.written - start >= r.ring)
+  uint32_t start = cur.edge_at - cur.pre;
+  if (cur.written - start >= cur.ring)
     return -1;
 
   busy(true);
   uint32_t c = cycles_now();
-  rotate(start, r.ring);
-  r.time.rotate = cycles_now() - c;
+  rotate(start, cur.ring);
+  cur.time.rotate = cycles_now() - c;
   busy(false);
-  r.time.total = cycles_now() - t0;
+  cur.time.total = cycles_now() - t0;
   if (tm)
-    *tm = r.time;
+    *tm = cur.time;
   if (at)
-    *at = r.pre;
-  return r.triggered ? 1 : 0;
+    *at = cur.pre;
+  return cur.triggered ? 1 : 0;
+}
+
+void capture_abort(void)
+{
+  if (!running)
+    return;
+  drop_run();
+  running = false;
+  HAL_TIM_Base_Stop(&htim6);
+  HAL_ADC_Stop_DMA(&hadc1);
+}
+
+int capture_run(const struct capture_trig *t, size_t n, size_t *at,
+                struct capture_time *tm)
+{
+  if (capture_start(t, n) < 0)
+    return -1;
+
+  int ret;
+  while ((ret = capture_poll(at, tm)) == CAPTURE_RUNNING) {
+#if SCOPE_IRQ
+    /* the dma and the 1 ms tick wake it */
+    __WFI();
+#endif
+  }
+  return ret;
 }
