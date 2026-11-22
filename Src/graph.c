@@ -3,7 +3,7 @@
 
 #include <math.h>
 #include <main.h>
-#include <graphics_ctrl.h>
+#include "Adafruit_ST7735_API.h"
 
 uint16_t graphBitmap[GRAPH_HEIGHT][GRAPH_WIDTH] = {0};
 

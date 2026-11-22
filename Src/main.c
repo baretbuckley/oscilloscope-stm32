@@ -26,7 +26,8 @@
 #include "shell.h"
 #include <dwt_module.h>
 #include <process_data.h>
-#include <graphics_ctrl.h>
+#include "Adafruit_TFTShield18_API.h"
+#include "Adafruit_ST7735_API.h"
 #include <graph.h>
 #include <stdio.h>
 
@@ -230,20 +231,27 @@ int main(void)
 
   while (1)
   {
+    shell_poll();
+    if (shell_new_grab())
+      taskBuildGraph = true;
 
-    if (taskBuildGraph) {
+    /* during a grab or a dump capture_buf is the dma's ring and every pass
+       of main counts, so the display tasks wait */
+    bool idle = !shell_busy();
+
+    if (idle && taskBuildGraph) {
       taskBuildGraph = false;
-      buildGraph(capture_buf, scope_len);
+      buildGraph(capture_buf, shell_frame_len());
       taskDisplayGraph = true;
     }
-    if (taskDisplayGraph) {
+    if (idle && taskDisplayGraph) {
       taskDisplayGraph = false;
       displayGraph();
     }
     if (HAL_GetTick() > inputPollTime) {
       taskReceiveInput = true;
     }
-    if (taskReceiveInput) {
+    if (idle && taskReceiveInput) {
       taskReceiveInput = false;
       uint32_t input = TFTShield18_readButtons();
       bool receivedInput = false;
@@ -270,14 +278,11 @@ int main(void)
         inputPollTime += 20;
       }
     }
-      
-
-    shell_poll();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 #if SCOPE_IRQ
-    /* sleep until a byte, the dma or the 1 ms tick wakes it */
+    /* sleep until a byte in or out, the dma or the 1 ms tick wakes it */
     __WFI();
 #endif
   }
