@@ -59,3 +59,11 @@ size mode=mode:
 
 clean:
     rm -r build
+
+# fmt
+format:
+    git ls-files -z '*.c' '*.h' | xargs -0 clang-format -i
+
+# fail if anything needs formatting, without touching files
+format-check:
+    git ls-files -z '*.c' '*.h' | xargs -0 clang-format --dry-run --Werror

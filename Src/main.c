@@ -21,17 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "Adafruit_TFTShield18_Macros.h"
-#include "capture.h"
-#include "shell.h"
-#include <dwt_module.h>
-#include <process_data.h>
-#include "Adafruit_TFTShield18_API.h"
-#include "Adafruit_ST7735_API.h"
-#include <graph.h>
-#include <stdio.h>
-
-
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,13 +56,6 @@ TIM_HandleTypeDef htim6;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-/* Converted value declaration */
-uint32_t                 uhADCxConvertedData;
-/* Input voltage declaration */
-int32_t                  uhADCxConvertedData_Voltage_mVolt;
-bool taskBuildGraph = false;
-bool taskDisplayGraph = false;
-bool taskReceiveInput = true;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,31 +75,6 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/* the average of a short grab, ADC1 belongs to the dma now */
-#define ADC_AVERAGE 64U
-
-static int32_t adc_read_mv(void)
-{
-  uint32_t sum = 0;
-
-  if (capture_run(NULL, ADC_AVERAGE, NULL, NULL) < 0)
-  {
-    Error_Handler();
-  }
-  for (uint32_t i = 0; i < ADC_AVERAGE; i++)
-  {
-    sum += capture_buf[i];
-  }
-
-  /* Read the converted value */
-  uhADCxConvertedData = sum / ADC_AVERAGE;
-
-  /* Computation of ADC conversions raw data to physical values             */
-  /* using helper macro.                                                    */
-  uhADCxConvertedData_Voltage_mVolt = __HAL_ADC_CALC_DATA_TO_VOLTAGE(VDDA_APPLI, uhADCxConvertedData, ADC_RESOLUTION_12B);
-  return uhADCxConvertedData_Voltage_mVolt;
-}
-
 /* USER CODE END 0 */
 
 /**
@@ -167,128 +125,20 @@ int main(void)
   MX_TIM6_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  
-  shell_init(adc_read_mv);
-  DWT_Init(); // NOTE: added from lib
-
-
+  if (!app_init())
+  {
+    return 1;
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
-  // init_graphics(&hspi2, &hi2c1);
-
-
-  // DWT_delayMs(100);
-  // Display_fillScreen(ST77XX_YELLOW);
-
-
-
-
-  printf("HCLK Frequency: %lu Hz\n\r", HAL_RCC_GetHCLKFreq());
-
-  if(!DWT_CheckInitialized()) printf("DWT failed to initialize!\n\r");
-
-  TFTShield18_create(&hi2c1);
-  if (!TFTShield18_begin())
-  {
-    printf("Failed to initialize TFT shield!\n\r");
-    return 1;
-  } else {
-    printf("TFT shield initialized successfully!\n\r");
-  }
-
-  TFTShield18_tftReset(true);
-
-  DWT_delayMs(100);
-
-  Display_create(&hspi2, DISP_CS_Pin, DISP_CS_GPIO_Port, DISP_DCX_SEL_Pin, DISP_DCX_SEL_GPIO_Port);
-
-  Display_init(INITR_BLACKTAB);
-
-  DWT_delayMs(100);
-
-  Display_setRotation(1);
-
-  Display_fillScreen(ST77XX_GREEN);
-
-  TFTShield18_setBacklight(TFTSHIELD_BACKLIGHT_ON);
-
-  // for (int i = 0; i < GRAPH_WIDTH; i++) {
-  //   pushValue((((i/2)*(3300/GRAPH_HEIGHT)) % (3300)));
-  // }
-  // DWT_delayMs(100);
-  // displayGraph();
-  // DWT_delayMs(100);
-
-  setVoltRange(0, 4000);
-  setTimeDomain(0.0, 1.0);
-  resetDisplay();
-
-  uint32_t inputPollTime = HAL_GetTick();
-  DWT_delayMs(100);
-
-  printf("Time:\n");
-  printf("input time: %li %li\n", HAL_GetTick(), inputPollTime);
-
-
   while (1)
   {
-    shell_poll();
-    if (shell_new_grab())
-      taskBuildGraph = true;
-
-    /* during a grab or a dump capture_buf is the dma's ring and every pass
-       of main counts, so the display tasks wait */
-    bool idle = !shell_busy();
-
-    if (idle && taskBuildGraph) {
-      taskBuildGraph = false;
-      buildGraph(capture_buf, shell_frame_len());
-      taskDisplayGraph = true;
-    }
-    if (idle && taskDisplayGraph) {
-      taskDisplayGraph = false;
-      displayGraph();
-    }
-    if (HAL_GetTick() > inputPollTime) {
-      taskReceiveInput = true;
-    }
-    if (idle && taskReceiveInput) {
-      taskReceiveInput = false;
-      uint32_t input = TFTShield18_readButtons();
-      bool receivedInput = false;
-      if (!(input&TFTSHIELD_BUTTON_UP)) {
-        zoomDisplay(1.1);
-        receivedInput = true;
-      }
-      if (!(input&TFTSHIELD_BUTTON_DOWN)) {
-        zoomDisplay(0.91);
-        receivedInput = true;
-      }
-      if (!(input&TFTSHIELD_BUTTON_RIGHT)) {
-        shiftDisplay(0.01);
-        receivedInput = true;
-      }
-      if (!(input&TFTSHIELD_BUTTON_LEFT)) {
-        shiftDisplay(-0.01);
-        receivedInput = true;
-      }
-      if (receivedInput) {
-        taskBuildGraph = true;
-        inputPollTime += 100;
-      } else {
-        inputPollTime += 20;
-      }
-    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-#if SCOPE_IRQ
-    /* sleep until a byte in or out, the dma or the 1 ms tick wakes it */
-    __WFI();
-#endif
+    app_loop();
   }
   /* USER CODE END 3 */
 }

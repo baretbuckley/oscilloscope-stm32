@@ -167,8 +167,7 @@ static void cmd_rate(const char *arg)
     capture_set_rate(hz);
   uint32_t rate = capture_rate_hz();
   printf("%lu Hz, %lu us for %u samples\n", (unsigned long)rate,
-         (unsigned long)((uint64_t)CAPTURE_LEN * 1000000U / rate),
-         CAPTURE_LEN);
+         (unsigned long)((uint64_t)CAPTURE_LEN * 1000000U / rate), CAPTURE_LEN);
 }
 
 static void cmd_trig(const char *arg)
@@ -309,7 +308,8 @@ static void grab_done(void)
          SCOPE_IRQ ? "interrupts" : "checks",
          (unsigned long)cycles_to_us(tm.rotate));
   if (SCOPE_IRQ)
-    printf("in the dma interrupts %lu us\n", (unsigned long)cycles_to_us(tm.isr));
+    printf("in the dma interrupts %lu us\n",
+           (unsigned long)cycles_to_us(tm.isr));
   if (tm.searched > 0) {
     uint32_t per = (uint32_t)((uint64_t)tm.search * 100U / tm.searched);
     printf("edge search %lu.%02lu cycles a sample over %lu samples\n",

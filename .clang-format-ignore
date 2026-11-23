@@ -1,0 +1,15 @@
+# CubeMX writes these, regenerate instead of formatting
+Src/main.c
+Src/stm32h5xx_*.c
+Src/system_stm32h5xx.c
+Src/syscalls.c
+Src/sysmem.c
+Inc/main.h
+Inc/stm32h5xx_*.h
+# partner's display code
+Src/graph.c
+Src/dwt_module.c
+Src/process_data.c
+Inc/graph.h
+Inc/dwt_module.h
+Inc/process_data.h
