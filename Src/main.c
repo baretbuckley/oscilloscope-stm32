@@ -34,6 +34,7 @@
 #include <stdio.h>
 
 
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -107,7 +108,6 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/* the average of a short grab, ADC1 belongs to the dma now */
 #define ADC_AVERAGE 64U
 
 static int32_t adc_read_mv(void)
@@ -131,7 +131,6 @@ static int32_t adc_read_mv(void)
   uhADCxConvertedData_Voltage_mVolt = __HAL_ADC_CALC_DATA_TO_VOLTAGE(VDDA_APPLI, uhADCxConvertedData, ADC_RESOLUTION_12B);
   return uhADCxConvertedData_Voltage_mVolt;
 }
-
 /* USER CODE END 0 */
 
 /**
@@ -182,11 +181,12 @@ int main(void)
   MX_TIM6_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  
   shell_init(adc_read_mv);
   DWT_Init(); // NOTE: added from lib
-
-
+  // if (!app_init())
+  // {
+  //   return 1;
+  // }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -338,10 +338,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-#if SCOPE_IRQ
-    /* sleep until a byte in or out, the dma or the 1 ms tick wakes it */
-    __WFI();
-#endif
+    // app_loop();
   }
   /* USER CODE END 3 */
 }

@@ -171,8 +171,7 @@ static void cmd_rate(const char *arg)
     capture_set_rate(hz);
   uint32_t rate = capture_rate_hz();
   printf("%lu Hz, %lu us for %u samples\n", (unsigned long)rate,
-         (unsigned long)((uint64_t)CAPTURE_LEN * 1000000U / rate),
-         CAPTURE_LEN);
+         (unsigned long)((uint64_t)CAPTURE_LEN * 1000000U / rate), CAPTURE_LEN);
 }
 
 static void cmd_trig(const char *arg)

@@ -1,0 +1,13 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 80
+BreakBeforeBraces: Linux
+SortIncludes: Never
+ReflowComments: false
+SpacesBeforeTrailingComments: 2
+AlignTrailingComments:
+  Kind: Leave
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+LineEnding: DeriveLF
+BracedInitializerIndentWidth: 2
