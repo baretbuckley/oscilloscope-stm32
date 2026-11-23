@@ -7,6 +7,7 @@
 
 #include "capture.h"
 #include "cycles.h"
+#include "grab.h"
 #include "main.h"
 
 extern UART_HandleTypeDef huart2;
@@ -121,9 +122,10 @@ static void cmd_help(void)
          "                     show or set the trigger level and edge\n"
          "pre [percent]        how much of a grab comes before the trigger\n"
          "grab [n]             take n samples of A1, %u at most\n"
+         "repeat-grab [n] [d]  take n samples of A1, %u at most, every d ms\n" 
          "dump                 the last grab in mV, one per line\n"
          "ctrl-c               stop a grab or a dump\n",
-         CAPTURE_LEN);
+         CAPTURE_LEN, CAPTURE_LEN);
 }
 
 /* hysteresis either side of the trigger level */
@@ -142,10 +144,11 @@ void __attribute__((noinline)) shell_grabbed(void)
 {
   __asm volatile("");
 }
-static bool trig_on;
+bool trig_on;
 static uint32_t trig_mv = VDDA_APPLI / 2U;
 static bool trig_rise = true;
 static uint32_t pre_pct = 50;
+
 
 static uint32_t to_mv(uint32_t raw)
 {
@@ -218,108 +221,111 @@ static uint32_t grab_rate;
 static void cmd_grab(const char *arg)
 {
   size_t n = (size_t)strtoul(arg, NULL, 10);
+  if (grabbing) printf("Unable to start grab, already running\n");
+  else startGrab(n);
+  
 
-  if (n == 0 || n > CAPTURE_LEN)
-    n = CAPTURE_LEN;
+  // if (n == 0 || n > CAPTURE_LEN)
+  //   n = CAPTURE_LEN;
 
-  struct capture_trig t = {
-    .level = to_raw(trig_mv),
-    .hyst = to_raw(HYST_MV),
-    .rise = trig_rise,
-    .pre = (uint32_t)(n * pre_pct / 100U),
-  };
-  /* a failed run leaves the ring unturned, nothing to dump */
-  grabbed = 0;
-  if (capture_start(trig_on ? &t : NULL, n) < 0) {
-    printf("grab failed\n");
-    return;
-  }
-  grab_n = n;
-  grab_rate = capture_rate_hz();
-  state = GRABBING;
+  // struct capture_trig t = {
+  //   .level = to_raw(trig_mv),
+  //   .hyst = to_raw(HYST_MV),
+  //   .rise = trig_rise,
+  //   .pre = (uint32_t)(n * pre_pct / 100U),
+  // };
+  // /* a failed run leaves the ring unturned, nothing to dump */
+  // grabbed = 0;
+  // if (capture_start(trig_on ? &t : NULL, n) < 0) {
+  //   printf("grab failed\n");
+  //   return;
+  // }
+  // grab_n = n;
+  // grab_rate = capture_rate_hz();
+  // state = GRABBING;
 }
 
 /* on every pass of main while a grab runs. the report once it is over */
 static void grab_done(void)
 {
-  size_t at;
-  struct capture_time tm;
-  int got = capture_poll(&at, &tm);
+//   size_t at;
+//   struct capture_time tm;
+//   int got = capture_poll(&at, &tm);
 
-  if (got == CAPTURE_RUNNING)
-    return;
-  state = IDLE;
-  if (got < 0) {
-    printf("grab failed\n> ");
-    return;
-  }
-  size_t n = grab_n;
-  uint32_t rate = grab_rate;
-  grabbed = n;
-#if SCOPE_GF2
-  uint32_t t0 = cycles_now();
-  for (size_t i = 0; i < n; i++)
-    scope_mv[i] = (float)capture_buf[i] * VDDA_APPLI / 4095.0f;
-  scope_len = (uint32_t)n;
-  uint32_t copy = cycles_now() - t0;
-#endif
-  shell_grabbed();
-  grab_new = true;
+//   if (got == CAPTURE_RUNNING)
+//     return;
+//   state = IDLE;
+//   if (got < 0) {
+//     printf("grab failed\n> ");
+//     return;
+//   }
+//   size_t n = grab_n;
+//   uint32_t rate = grab_rate;
+//   grabbed = n;
+// #if SCOPE_GF2
+//   uint32_t t0 = cycles_now();
+//   for (size_t i = 0; i < n; i++)
+//     scope_mv[i] = (float)capture_buf[i] * VDDA_APPLI / 4095.0f;
+//   scope_len = (uint32_t)n;
+//   uint32_t copy = cycles_now() - t0;
+// #endif
+//   shell_grabbed();
+//   grab_new = true;
 
-  uint32_t c = cycles_now();
-  uint32_t lo = 4095, hi = 0, sum = 0;
-  for (size_t i = 0; i < n; i++) {
-    uint32_t v = capture_buf[i];
-    lo = v < lo ? v : lo;
-    hi = v > hi ? v : hi;
-    sum += v;
-  }
+//   uint32_t c = cycles_now();
+//   uint32_t lo = 4095, hi = 0, sum = 0;
+//   for (size_t i = 0; i < n; i++) {
+//     uint32_t v = capture_buf[i];
+//     lo = v < lo ? v : lo;
+//     hi = v > hi ? v : hi;
+//     sum += v;
+//   }
 
-  uint32_t mid = (lo + hi) / 2, band = (hi - lo) / 8;
-  int armed = 0;
-  size_t first = 0, last = 0, rises = 0;
-  for (size_t i = 0; i < n; i++) {
-    if (capture_buf[i] + band < mid) {
-      armed = 1;
-    } else if (armed && capture_buf[i] > mid + band) {
-      armed = 0;
-      if (rises++ == 0)
-        first = i;
-      last = i;
-    }
-  }
-  uint32_t stats = cycles_now() - c;
+//   uint32_t mid = (lo + hi) / 2, band = (hi - lo) / 8;
+//   int armed = 0;
+//   size_t first = 0, last = 0, rises = 0;
+//   for (size_t i = 0; i < n; i++) {
+//     if (capture_buf[i] + band < mid) {
+//       armed = 1;
+//     } else if (armed && capture_buf[i] > mid + band) {
+//       armed = 0;
+//       if (rises++ == 0)
+//         first = i;
+//       last = i;
+//     }
+//   }
+//   uint32_t stats = cycles_now() - c;
 
-  printf("%u samples at %lu Hz, %lu us\n", (unsigned)n, (unsigned long)rate,
-         (unsigned long)((uint64_t)n * 1000000U / rate));
-  if (got > 0)
-    printf("triggered at sample %u\n", (unsigned)at);
-  else if (trig_on)
-    printf("no trigger in %u ms, took it anyway\n", CAPTURE_AUTO_MS);
-  printf("min %lu  max %lu  mean %lu mV\n", (unsigned long)to_mv(lo),
-         (unsigned long)to_mv(hi), (unsigned long)to_mv(sum / n));
-  if (rises > 1 && band > 0)
-    printf("about %lu Hz\n",
-           (unsigned long)((uint64_t)(rises - 1) * rate / (last - first)));
-  else
-    printf("no full cycle in the window\n");
+//   // printf("%u samples at %lu Hz, %lu us\n", (unsigned)n, (unsigned long)rate,
+//   //        (unsigned long)((unsigned long)n * 1000000U / rate));
+//   if (got > 0)
+//     printf("triggered at sample %u\n", (unsigned)at);
+//   else if (trig_on)
+//     printf("no trigger in %u ms, took it anyway\n", CAPTURE_AUTO_MS);
+//   printf("min %lu  max %lu  mean %lu mV\n", (unsigned long)to_mv(lo),
+//          (unsigned long)to_mv(hi), (unsigned long)to_mv(sum / n));
+//   if (rises > 1 && band > 0)
+//     printf("about %lu Hz\n",
+//            (unsigned long)((uint64_t)(rises - 1) * rate / (last - first)));
+//   else
+//     printf("no full cycle in the window\n");
 
-  printf("took %lu us, %lu dma %s, rotate %lu us\n",
-         (unsigned long)cycles_to_us(tm.total), (unsigned long)tm.loops,
-         SCOPE_IRQ ? "interrupts" : "checks",
-         (unsigned long)cycles_to_us(tm.rotate));
-  if (SCOPE_IRQ)
-    printf("in the dma interrupts %lu us\n", (unsigned long)cycles_to_us(tm.isr));
-  if (tm.searched > 0) {
-    uint32_t per = (uint32_t)((uint64_t)tm.search * 100U / tm.searched);
-    printf("edge search %lu.%02lu cycles a sample over %lu samples\n",
-           (unsigned long)(per / 100U), (unsigned long)(per % 100U),
-           (unsigned long)tm.searched);
-  }
-#if SCOPE_GF2
-  printf("float copy %lu us\n", (unsigned long)cycles_to_us(copy));
-#endif
-  printf("stats %lu us\n> ", (unsigned long)cycles_to_us(stats));
+//   printf("took %lu us, %lu dma %s, rotate %lu us\n",
+//          (unsigned long)cycles_to_us(tm.total), (unsigned long)tm.loops,
+//          SCOPE_IRQ ? "interrupts" : "checks",
+//          (unsigned long)cycles_to_us(tm.rotate));
+//   if (SCOPE_IRQ)
+//     printf("in the dma interrupts %lu us\n", (unsigned long)cycles_to_us(tm.isr));
+//   if (tm.searched > 0) {
+//     uint32_t per = (uint32_t)((uint64_t)tm.search * 100U / tm.searched);
+//     printf("edge search %lu.%02lu cycles a sample over %lu samples\n",
+//            (unsigned long)(per / 100U), (unsigned long)(per % 100U),
+//            (unsigned long)tm.searched);
+//   }
+// #if SCOPE_GF2
+//   printf("float copy %lu us\n", (unsigned long)cycles_to_us(copy));
+// #endif
+//   printf("stats %lu us\n> ", (unsigned long)cycles_to_us(stats));
 }
 
 /* a whole dump is about 20 KB, near 2 s at 115200. it goes a few lines a
@@ -343,6 +349,31 @@ static void dump_more(void)
   }
 }
 
+// struct RepeatGrabConfig {
+//   size_t n;
+//   size_t delay;
+// } RepeatSettings;
+
+// static bool repeatEnabled = false;
+
+// static void cmd_grab_repeat(const char *arg) {
+//   const char *nextArg = NULL;
+//   size_t n = (size_t)strtoul(arg, nextArg, 10);
+
+//   if (n == 0 || n > CAPTURE_LEN)
+//     n = CAPTURE_LEN;
+
+//   size_t d = (size_t)strtoul(nextArg, NULL, 10);
+
+//   // if (n == 0 || n > CAPTURE_LEN)
+//   //   n = CAPTURE_LEN;
+
+
+
+// }
+
+
+
 static void run(char *cmd)
 {
   /* adc grabs into the same buffer */
@@ -363,6 +394,8 @@ static void run(char *cmd)
     cmd_grab(cmd + 4);
   else if (strcmp(cmd, "dump") == 0)
     cmd_dump();
+  // else if (strcmp(cmd, "repeat-grab") == 0 || strncmp(cmd, "repeat-grab ", 12) == 0)
+  //   cmd_repeatGrab();
   else if (cmd[0] != '\0')
     printf("%s? try help\n", cmd);
   /* a grab or a dump prints the prompt when it is over */
@@ -413,8 +446,8 @@ void shell_poll(void)
     printf("^C\n> ");
   }
 
-  if (state == GRABBING)
-    grab_done();
+  // if (state == GRABBING)
+  //   grab_done();
   else if (state == DUMPING)
     dump_more();
 

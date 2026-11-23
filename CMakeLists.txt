@@ -50,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Src/process_data.c 
     Src/trigger.c
     Src/graph.c
+    Src/grab.c
     
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/graphics/Adafruit_GFX.cpp

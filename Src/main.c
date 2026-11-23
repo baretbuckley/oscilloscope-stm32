@@ -24,6 +24,7 @@
 #include "Adafruit_TFTShield18_Macros.h"
 #include "capture.h"
 #include "shell.h"
+#include "grab.h"
 #include <dwt_module.h>
 #include <process_data.h>
 #include "Adafruit_TFTShield18_API.h"
@@ -235,27 +236,30 @@ int main(void)
 
   while (1)
   {
-    shell_poll();
-    if (shell_new_grab())
-      taskBuildGraph = true;
-
+    if (grabbing) {
+      pollGrabDone();
+      if (!grabbing) taskBuildGraph = true;
+    } else {
+      shell_poll();
+    }
+    
     /* during a grab or a dump capture_buf is the dma's ring and every pass
        of main counts, so the display tasks wait */
     bool idle = !shell_busy();
 
-    if (idle && taskBuildGraph) {
+    if (idle && !grabbing && taskBuildGraph) {
       taskBuildGraph = false;
-      buildGraph(capture_buf, shell_frame_len());
+      buildGraph(capture_buf, grabbedSize());
       taskDisplayGraph = true;
     }
-    if (idle && taskDisplayGraph) {
+    if (idle && !grabbing && taskDisplayGraph) {
       taskDisplayGraph = false;
       displayGraph();
     }
     if (HAL_GetTick() > inputPollTime) {
       taskReceiveInput = true;
     }
-    if (idle && taskReceiveInput) {
+    if (idle && !grabbing && taskReceiveInput) {
       taskReceiveInput = false;
       uint32_t input = TFTShield18_readButtons();
       bool receivedInput = false;
