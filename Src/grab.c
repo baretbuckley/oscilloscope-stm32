@@ -31,6 +31,13 @@ int setGrabSize(size_t n) {
     return 0;
 }
 
+size_t grabbedSize()
+{
+  return grabbing ? 0 : grab_n;
+}
+
+
+
 void startGrab() {
     /* a failed run leaves the ring unturned, nothing to dump */
     grabbing = false;
@@ -125,7 +132,3 @@ int pollGrabDone() {
     return 0;
 }
 
-size_t grabbedSize()
-{
-  return grabbing ? 0 : grab_n;
-}

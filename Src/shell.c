@@ -268,7 +268,7 @@ static void cmd_repeatGrab(const char *arg) {
     return;
   }
 
-  const char *nextArg = NULL;
+  char *nextArg = NULL;
   size_t n = (size_t)strtoul(arg, &nextArg, 10);
 
   if (n == 0 || n > CAPTURE_LEN)

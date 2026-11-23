@@ -8,6 +8,8 @@
 
 int setGrabSize(size_t n);
 
+size_t grabbedSize();
+
 extern bool grabbing;
 
 void startGrab();
