@@ -18,10 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "app_freertos.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "app.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -125,11 +126,18 @@ int main(void)
   MX_TIM6_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  if (!app_init())
-  {
-    return 1;
-  }
+
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();
+  /* Call init function for freertos objects (in app_freertos.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -138,7 +146,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    app_loop();
   }
   /* USER CODE END 3 */
 }
@@ -307,13 +314,13 @@ static void MX_GPDMA1_Init(void)
   __HAL_RCC_GPDMA1_CLK_ENABLE();
 
   /* GPDMA1 interrupt Init */
-    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel0_IRQn);
-    HAL_NVIC_SetPriority(GPDMA1_Channel5_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(GPDMA1_Channel5_IRQn, 7, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel5_IRQn);
-    HAL_NVIC_SetPriority(GPDMA1_Channel6_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(GPDMA1_Channel6_IRQn, 7, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel6_IRQn);
-    HAL_NVIC_SetPriority(GPDMA1_Channel7_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(GPDMA1_Channel7_IRQn, 7, 0);
     HAL_NVIC_EnableIRQ(GPDMA1_Channel7_IRQn);
 
   /* USER CODE BEGIN GPDMA1_Init 1 */
@@ -579,6 +586,28 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM7 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM7)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.

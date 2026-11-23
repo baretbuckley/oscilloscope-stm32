@@ -78,6 +78,8 @@ void HAL_MspInit(void)
   /* USER CODE END MspInit 0 */
 
   /* System interrupt init*/
+  /* PendSV_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(PendSV_IRQn, 15, 0);
 
   /* Disable the internal Pull-Up in Dead Battery pins of UCPD peripheral */
   HAL_PWREx_DisableUCPDDeadBattery();
@@ -303,9 +305,9 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
     }
 
     /* I2C1 interrupt Init */
-    HAL_NVIC_SetPriority(I2C1_EV_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(I2C1_EV_IRQn, 7, 0);
     HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
-    HAL_NVIC_SetPriority(I2C1_ER_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(I2C1_ER_IRQn, 7, 0);
     HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
     /* USER CODE BEGIN I2C1_MspInit 1 */
 
@@ -419,7 +421,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     }
 
     /* SPI2 interrupt Init */
-    HAL_NVIC_SetPriority(SPI2_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(SPI2_IRQn, 7, 0);
     HAL_NVIC_EnableIRQ(SPI2_IRQn);
     /* USER CODE BEGIN SPI2_MspInit 1 */
 
@@ -551,7 +553,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* USART2 interrupt Init */
-    HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
     /* USER CODE BEGIN USART2_MspInit 1 */
 

@@ -1,10 +1,13 @@
 # CubeMX writes these, regenerate instead of formatting
 Src/main.c
+Src/app_freertos.c
 Src/stm32h5xx_*.c
 Src/system_stm32h5xx.c
 Src/syscalls.c
 Src/sysmem.c
 Inc/main.h
+Inc/app_freertos.h
+Inc/FreeRTOSConfig.h
 Inc/stm32h5xx_*.h
 # partner's display code
 Src/graph.c
