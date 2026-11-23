@@ -23,19 +23,23 @@ static uint32_t to_mv(uint32_t raw)
 static size_t grab_n;
 static uint32_t grab_rate;
 
-void startGrab(size_t n) {
-  if (n == 0 || n > CAPTURE_LEN)
-    n = CAPTURE_LEN;
+int setGrabSize(size_t n) {
+    if (grabbing) return -1;
+    if (n == 0 || n > CAPTURE_LEN)
+        n = CAPTURE_LEN;
+    grab_n = n;
+    return 0;
+}
 
-  /* a failed run leaves the ring unturned, nothing to dump */
-  grabbing = false;
-  if (capture_start(NULL, n) < 0) {
-    printf("grab failed\n");
+void startGrab() {
+    /* a failed run leaves the ring unturned, nothing to dump */
     grabbing = false;
-  }
-  grab_n = n;
-  grab_rate = capture_rate_hz();
-  grabbing = true;
+    if (capture_start(NULL, grab_n) < 0) {
+        printf("grab failed\n");
+        grabbing = false;
+    }
+    grab_rate = capture_rate_hz();
+    grabbing = true;
 }
 
 int pollGrabDone() {

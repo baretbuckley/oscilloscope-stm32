@@ -25,4 +25,14 @@ static inline uint32_t cycles_to_us(uint32_t cycles)
   return (uint32_t)((uint64_t)cycles * 1000000U / SystemCoreClock);
 }
 
+static inline uint32_t us_to_cycles(uint32_t us) {
+  return (uint32_t)((uint64_t)us * SystemCoreClock / 1000000U);
+}
+
+static inline void delayUs(volatile uint32_t us) {
+  uint32_t startCycle = DWT->CYCCNT;
+  uint32_t delayCycles = us_to_cycles(us);
+  while ((uint32_t)(DWT->CYCCNT - startCycle) < delayCycles);
+}
+
 #endif

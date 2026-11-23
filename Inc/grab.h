@@ -6,10 +6,11 @@
 #include <stdint.h>
 
 
+int setGrabSize(size_t n);
 
 extern bool grabbing;
 
-void startGrab(size_t n);
+void startGrab();
 
 int pollGrabDone();
 

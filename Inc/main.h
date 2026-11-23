@@ -44,6 +44,10 @@ extern "C" {
 extern bool taskBuildGraph;
 extern bool taskDisplayGraph;
 extern bool taskReceiveInput;
+extern bool taskGrab;
+
+extern bool repeatGrabEnable;
+extern size_t repeatGrabDelay;
 
 /* USER CODE END EC */
 

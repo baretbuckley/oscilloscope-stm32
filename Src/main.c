@@ -25,6 +25,7 @@
 #include "capture.h"
 #include "shell.h"
 #include "grab.h"
+#include <cycles.h>
 #include <dwt_module.h>
 #include <process_data.h>
 #include "Adafruit_TFTShield18_API.h"
@@ -74,6 +75,11 @@ int32_t                  uhADCxConvertedData_Voltage_mVolt;
 bool taskBuildGraph = false;
 bool taskDisplayGraph = false;
 bool taskReceiveInput = true;
+bool taskGrab = false;
+
+bool repeatGrabEnable = false;
+size_t repeatGrabDelay = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -233,6 +239,7 @@ int main(void)
   printf("Time:\n");
   printf("input time: %li %li\n", HAL_GetTick(), inputPollTime);
 
+  uint32_t lastGrabRepeat = HAL_GetTick();
 
   while (1)
   {
@@ -242,10 +249,32 @@ int main(void)
     } else {
       shell_poll();
     }
+
+
+
+
     
     /* during a grab or a dump capture_buf is the dma's ring and every pass
        of main counts, so the display tasks wait */
     bool idle = !shell_busy();
+
+    if (repeatGrabEnable && idle) {
+      uint32_t curr = cycles_to_us(cycles_now());
+      if (curr - lastGrabRepeat > repeatGrabDelay) {
+        lastGrabRepeat = curr;
+        if (grabbing) {
+          printf("Error attempting to repeat grab before previous finished\n");
+        } else {
+          printf("grabbing\n");
+          taskGrab = true;
+        }
+      }
+    }
+
+    if (!grabbing && idle && taskGrab) {
+      startGrab();
+      taskGrab = false;
+    }
 
     if (idle && !grabbing && taskBuildGraph) {
       taskBuildGraph = false;
