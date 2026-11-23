@@ -1,14 +1,13 @@
 
 
 #include <stdint.h>
-#define GRAPH_BKG_COLOR 0x0000;
-#define GRAPH_COLOR 0xf986; // R-31, G-12, B-6
-#define GRAPH_WIDTH 100
+#define GRAPH_BKG_COLOR 0x0000
+#define GRAPH_WIDTH 128
 #define GRAPH_HEIGHT 32
 
 
 
-
+void setGraphColor(uint16_t color);
 
 void setTimeDomain(float min, float max);
 void setVoltRange(uint16_t min, uint16_t max);

@@ -6,9 +6,8 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
-		    "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
-            "cacheVariables": {
-            }
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {}
         },
         {
             "name": "Debug",
@@ -56,6 +55,14 @@
         {
             "name": "Release-irq",
             "configurePreset": "Release-irq"
+        },
+        {
+            "name": "irq-debug",
+            "description": "",
+            "displayName": "",
+            "inherits": [
+                "Debug-irq"
+            ]
         }
     ]
 }

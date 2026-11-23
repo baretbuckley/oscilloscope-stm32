@@ -4,12 +4,16 @@
 #include <math.h>
 #include <main.h>
 #include "Adafruit_ST7735_API.h"
+#include "grab.h"
 #include <stdint.h>
 
-uint16_t graphBitmap[GRAPH_HEIGHT][GRAPH_WIDTH] = {0};
+uint8_t graphBitmap[GRAPH_HEIGHT][GRAPH_WIDTH/8] = {0};
+// uint16_t graphBitmap[GRAPH_HEIGHT][GRAPH_WIDTH] = {0};
 
 uint16_t *data;
 uint16_t dataLen;
+
+static uint16_t graphColor = 0xf986; // R-31, G-12, B-6
 
 struct Range {
     float min;
@@ -35,6 +39,10 @@ typedef union {
 // This means it represents the range [0,2) with 1 << 15 being value of 1
 uint16_t displayOffset = 0;
 uint16_t displayWidth = 0;
+
+void setGraphColor(uint16_t color) {
+    graphColor = color;
+}
 
 void setTimeDomain(float min, float max) {
     xAxis = (struct Range){min, max};
@@ -117,9 +125,9 @@ uint32_t mapIdx(float val, uint16_t range) {
 
 void buildGraph(uint16_t *data, uint32_t len) {
     // reset graph
-    for (int x = 0; x < GRAPH_WIDTH; x++) 
+    for (int x = 0; x < GRAPH_WIDTH/8; x++) 
         for (int y = 0; y < GRAPH_HEIGHT; y++)
-            graphBitmap[y][x] = GRAPH_BKG_COLOR;
+            graphBitmap[y][x] = 0;
 
     uint32_t from = ((uint32_t)(displayOffset) * len) >> 15;
     
@@ -132,10 +140,11 @@ void buildGraph(uint16_t *data, uint32_t len) {
         if (gHeight >= GRAPH_HEIGHT) 
             gHeight = GRAPH_HEIGHT-1;
         if (gIdx >= GRAPH_WIDTH) continue;
-        graphBitmap[gHeight][gIdx] = GRAPH_COLOR;
+        graphBitmap[gHeight][gIdx/8] |= 1 << (gIdx%8);
     }
 }
 
 void displayGraph() {
-    Display_drawRGBBitmap(10, 10, (uint16_t*)graphBitmap, GRAPH_WIDTH, GRAPH_HEIGHT);
+    Display_drawBitmapBg(10, 10, (uint8_t*)graphBitmap, GRAPH_WIDTH, GRAPH_HEIGHT, graphColor, GRAPH_BKG_COLOR);
+    // Display_drawRGBBitmap(10, 10, (uint16_t*)graphBitmap, GRAPH_WIDTH, GRAPH_HEIGHT);
 }

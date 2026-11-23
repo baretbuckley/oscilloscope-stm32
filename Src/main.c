@@ -80,6 +80,14 @@ bool taskGrab = false;
 bool repeatGrabEnable = false;
 size_t repeatGrabDelay = 0;
 
+#define NUM_GRAPH_COLORS 4
+const uint16_t GRAPH_COLORS[4] = {
+  0xf986, // R-31, G-12, B-6
+  0xe700, // R-31 G 57 B-0 
+  0xa6ff, // R-31, G-41, B-31 Magenta
+  0Xffff, // White
+};
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -238,6 +246,9 @@ int main(void)
 
   printf("Time:\n");
   printf("input time: %li %li\n", HAL_GetTick(), inputPollTime);
+  uint16_t colorIdx = 0;
+  setGraphColor(GRAPH_COLORS[colorIdx]);
+  bool buttonHold = false;
 
   uint32_t lastGrabRepeat = HAL_GetTick();
 
@@ -288,7 +299,7 @@ int main(void)
     if (HAL_GetTick() > inputPollTime) {
       taskReceiveInput = true;
     }
-    if (idle && !grabbing && taskReceiveInput) {
+    if (taskReceiveInput) {
       taskReceiveInput = false;
       uint32_t input = TFTShield18_readButtons();
       bool receivedInput = false;
@@ -307,6 +318,15 @@ int main(void)
       if (!(input&TFTSHIELD_BUTTON_LEFT)) {
         if (shiftDisplay(-0.004) < 0) printf("shift left failed\n");
         receivedInput = true;
+      }
+      if (!(input&TFTSHIELD_BUTTON_1)) {
+        if (!buttonHold) {
+          setGraphColor(GRAPH_COLORS[(++colorIdx)%NUM_GRAPH_COLORS]);
+          taskDisplayGraph = true;
+        }
+        buttonHold = true;
+      } else {
+        buttonHold = false;
       }
       if (receivedInput) {
         taskBuildGraph = true;
