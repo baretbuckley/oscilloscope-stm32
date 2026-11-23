@@ -260,19 +260,19 @@ int main(void)
       uint32_t input = TFTShield18_readButtons();
       bool receivedInput = false;
       if (!(input&TFTSHIELD_BUTTON_UP)) {
-        zoomDisplay(1.1);
+        if (zoomDisplay(1.1) < 0) printf("zoom out failed\n");
         receivedInput = true;
       }
       if (!(input&TFTSHIELD_BUTTON_DOWN)) {
-        zoomDisplay(0.91);
+        if (zoomDisplay(0.91) < 0) printf("zoom in failed\n");
         receivedInput = true;
       }
       if (!(input&TFTSHIELD_BUTTON_RIGHT)) {
-        shiftDisplay(0.01);
+        if (shiftDisplay(0.004) < 0) printf("shift right failed\n");
         receivedInput = true;
       }
       if (!(input&TFTSHIELD_BUTTON_LEFT)) {
-        shiftDisplay(-0.01);
+        if (shiftDisplay(-0.004) < 0) printf("shift left failed\n");
         receivedInput = true;
       }
       if (receivedInput) {

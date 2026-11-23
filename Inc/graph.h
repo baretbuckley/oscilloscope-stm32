@@ -20,8 +20,8 @@ void setDisplayShift(float shift);
 
 void resetDisplay();
 
-void zoomDisplay(float scale);
-void shiftDisplay(float shift);
+int32_t zoomDisplay(float scale);
+int32_t shiftDisplay(float shift);
 
 
 
